@@ -37,6 +37,7 @@ approvals, and an attributed transcript.
 
 ## Docs
 
+- [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md): zero to a team driving one agent, step by step
 - [docs/DESIGN.md](docs/DESIGN.md): architecture and milestones
 - [docs/DEPLOY.md](docs/DEPLOY.md): laptop mode, server mode, HTTPS, proxies
 - [docs/ENTERPRISE-SETUP.md](docs/ENTERPRISE-SETUP.md): GitHub App and policy checklist
@@ -54,9 +55,18 @@ platform package; set `COPILOT_CLI_PATH` to use an existing Copilot CLI.
 
 ## Status
 
-Skeleton. The server, protocol, queue, auth flows and client are laid out and
-typecheck; end-to-end behaviour against a live Copilot session has not been
-exercised yet.
+First milestone implemented. The room, queue, permission routing, auth
+flows, transport and client are covered by unit tests and by end-to-end
+tests over real HTTP and WebSockets against a scripted fake agent. The
+Copilot SDK wrapper compiles against the SDK's published types; the
+remaining step is a run against a live Copilot session on a machine with
+Copilot access, which the walkthrough describes.
+
+## Releasing
+
+Tag a version (`npm version minor && git push --follow-tags`). The Release
+workflow publishes the package to npm and the server image to GitHub
+Container Registry.
 
 ## License
 
