@@ -4,7 +4,7 @@
  * Everything user-facing flows through here. Transport (WebSocket) is kept
  * in ws.ts so this class can be driven from tests without sockets.
  */
-import { CopilotAgent } from "../agent/copilot.js";
+import type { Agent, AgentFactory } from "../agent/agent.js";
 import { PermissionRouter } from "../agent/permissions.js";
 import { PromptQueue } from "../agent/queue.js";
 import { Transcript } from "./transcript.js";
@@ -23,10 +23,10 @@ export interface RoomOptions {
   name: string;
   repo: string;
   model?: string;
-  sessionId?: string;
   stateDir: string;
-  copilotToken?: string;
   permissionTimeoutMs: number;
+  /** Builds the agent once the room has wired its callbacks. */
+  agentFactory: AgentFactory;
   log: (msg: string) => void;
 }
 
@@ -41,11 +41,12 @@ export class Room {
   private readonly queue = new PromptQueue();
   private readonly transcript: Transcript;
   private readonly permissions: PermissionRouter;
-  private readonly agent: CopilotAgent;
+  private readonly agent: Agent;
   private status: RoomStatus = "starting";
 
   constructor(private readonly opts: RoomOptions) {
     this.transcript = new Transcript(opts.stateDir);
+    this.transcript.onError((err) => opts.log(`transcript write failed: ${String(err)}`));
     this.permissions = new PermissionRouter({
       timeoutMs: opts.permissionTimeoutMs,
       deciders: () => this.currentDeciders(),
@@ -58,15 +59,11 @@ export class Room {
           expiresAt: p.expiresAt.toISOString(),
         }),
       resolved: (requestId, decision, byUserId) =>
-        void this.record({ kind: "permission.resolved", at: now(), requestId, decision, byUserId }),
+        this.record({ kind: "permission.resolved", at: now(), requestId, decision, byUserId }),
     });
-    this.agent = new CopilotAgent({
-      repo: opts.repo,
-      model: opts.model,
-      sessionId: opts.sessionId,
-      gitHubToken: opts.copilotToken,
+    this.agent = opts.agentFactory({
       onPermissionRequest: this.permissions.handler,
-      onEvent: (event) => void this.record({ kind: "agent", at: now(), event }),
+      onEvent: (event) => this.record({ kind: "agent", at: now(), event }),
       onIdle: () => this.onTurnFinished("completed"),
       onError: (m) => opts.log(m),
     });
@@ -82,10 +79,15 @@ export class Room {
   async stop(): Promise<void> {
     this.permissions.rejectAll();
     await this.agent.stop();
+    await this.transcript.flush();
   }
 
   get sessionId(): string {
     return this.agent.sessionId;
+  }
+
+  get currentStatus(): RoomStatus {
+    return this.status;
   }
 
   // --- connections ---------------------------------------------------------
@@ -164,7 +166,7 @@ export class Room {
     if (!next) return;
     this.setStatus("running");
     this.broadcastQueue();
-    await this.record({ kind: "turn.started", at: now(), prompt: next });
+    this.record({ kind: "turn.started", at: now(), prompt: next });
     try {
       await this.agent.send(next.authorLogin, next.text);
     } catch (err) {
@@ -174,9 +176,15 @@ export class Room {
   }
 
   private onTurnFinished(reason: "completed" | "aborted" | "error", error?: string): void {
+    // The runtime also reports idle after start/resume and after aborts; only
+    // a running turn can finish.
+    if (!this.queue.isRunning) {
+      if (this.status === "starting") this.setStatus("idle");
+      return;
+    }
     const done = this.queue.finish();
     this.setStatus("idle");
-    if (done) void this.record({ kind: "turn.finished", at: now(), promptId: done.id, reason, error });
+    if (done) this.record({ kind: "turn.finished", at: now(), promptId: done.id, reason, error });
     this.broadcastQueue();
     void this.pump();
   }
@@ -216,8 +224,8 @@ export class Room {
     this.broadcast({ type: "queue", queue: snap.queue, current: snap.current });
   }
 
-  private async record(entry: TranscriptEntry): Promise<void> {
-    await this.transcript.append(entry);
+  private record(entry: TranscriptEntry): void {
+    this.transcript.append(entry);
     this.broadcast({ type: "transcript", entry });
   }
 

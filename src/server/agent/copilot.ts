@@ -6,10 +6,11 @@
  * rest of the server never imports the SDK directly.
  */
 import { CopilotClient } from "@github/copilot-sdk";
-import type { CopilotSession, PermissionHandler, SessionEvent } from "@github/copilot-sdk";
+import type { CopilotSession, SessionEvent } from "@github/copilot-sdk";
 import type { AgentEvent } from "../../protocol/messages.js";
+import type { Agent, AgentCallbacks, AgentFactory } from "./agent.js";
 
-export interface AgentOptions {
+export interface CopilotAgentConfig {
   repo: string;
   model?: string;
   sessionId?: string;
@@ -17,10 +18,13 @@ export interface AgentOptions {
   gitHubToken?: string;
   /** Directory for the runtime's own state (COPILOT_HOME). */
   stateDir?: string;
-  onPermissionRequest: PermissionHandler;
-  onEvent: (event: AgentEvent) => void;
-  onIdle: () => void;
-  onError: (message: string) => void;
+}
+
+export type AgentOptions = CopilotAgentConfig & AgentCallbacks;
+
+/** Factory the server uses by default. */
+export function copilotAgentFactory(config: CopilotAgentConfig): AgentFactory {
+  return (callbacks) => new CopilotAgent({ ...config, ...callbacks });
 }
 
 /**
@@ -48,7 +52,7 @@ const FORWARDED_EVENTS = new Set<string>([
 
 const ROOM_SYSTEM_MESSAGE = `You are working inside a shared room. Several developers are collaborating with you on the same repository and the same conversation. Each user message is prefixed with the author's name in square brackets, for example "[alice]:". Address people by name when it helps, keep track of who asked for what, and if two requests conflict, say so rather than silently picking one.`;
 
-export class CopilotAgent {
+export class CopilotAgent implements Agent {
   private client: CopilotClient | null = null;
   private session: CopilotSession | null = null;
   private unsubscribe: (() => void) | null = null;

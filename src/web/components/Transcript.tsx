@@ -33,6 +33,7 @@ interface Block {
 function coalesce(entries: TranscriptEntry[]): Block[] {
   const out: Block[] = [];
   let streaming: Block | null = null;
+  const toolNames = new Map<string, string>();
   let i = 0;
   for (const e of entries) {
     i++;
@@ -69,13 +70,18 @@ function coalesce(entries: TranscriptEntry[]): Block[] {
         } else if (content) out.push({ key: `m${i}`, cls: "assistant", who: "copilot", text: content });
         break;
       }
-      case "tool.execution_start":
+      case "tool.execution_start": {
         streaming = null;
-        out.push({ key: `ts${i}`, cls: "tool", text: `▶ ${String(d.toolName ?? "tool")} ${summarize(d.arguments)}` });
+        const name = String(d.toolName ?? "tool");
+        toolNames.set(String(d.toolCallId ?? ""), name);
+        out.push({ key: `ts${i}`, cls: "tool", text: `▶ ${name} ${summarize(d.arguments)}` });
         break;
-      case "tool.execution_complete":
-        out.push({ key: `tc${i}`, cls: "tool", text: `✓ ${String(d.toolName ?? "tool")}${d.success === false ? " (failed)" : ""}` });
+      }
+      case "tool.execution_complete": {
+        const name = toolNames.get(String(d.toolCallId ?? "")) ?? "tool";
+        out.push({ key: `tc${i}`, cls: "tool", text: `${d.success === false ? "✗" : "✓"} ${name}${d.success === false ? " (failed)" : ""}` });
         break;
+      }
       case "session.error":
         out.push({ key: `e${i}`, cls: "meta", text: `error: ${String(d.message ?? "")}` });
         break;
