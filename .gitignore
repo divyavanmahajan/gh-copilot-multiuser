@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node / copilot-room
+node_modules/
+dist/
+*.tsbuildinfo
+.copilot-room/
