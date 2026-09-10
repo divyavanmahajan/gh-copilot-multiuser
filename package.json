@@ -1,0 +1,46 @@
+{
+  "name": "copilot-room",
+  "version": "0.0.1",
+  "description": "A shared room where a small team drives one GitHub Copilot agent session from their browsers.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "bin": {
+    "copilot-room": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "npm run build:server && npm run build:web",
+    "build:server": "tsup",
+    "build:web": "vite build",
+    "dev": "tsx src/cli.ts --repo . --dev",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "start": "node dist/cli.js"
+  },
+  "dependencies": {
+    "@github/copilot-sdk": "^1.0.13",
+    "@hono/node-server": "^2.1.1",
+    "hono": "^4.13.7",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "ws": "^8.21.3",
+    "zod": "^4.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/ws": "^8",
+    "@vitejs/plugin-react": "^5",
+    "tsup": "^8.5.1",
+    "tsx": "^4",
+    "typescript": "^5.9",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.0"
+  }
+}
