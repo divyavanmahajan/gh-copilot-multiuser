@@ -43,9 +43,20 @@ export function ApprovalCard({
 }
 
 function describe(r: Record<string, unknown>): string {
-  // Permission requests are a union keyed by `kind`; show the most useful field for each.
-  for (const key of ["fullCommandText", "command", "path", "url", "toolName", "serverName", "intention"]) {
-    if (typeof r[key] === "string") return String(r[key]);
+  // PermissionRequest is a union keyed by `kind`; show what a human needs to decide.
+  const intention = typeof r.intention === "string" ? `${r.intention}\n` : "";
+  switch (r.kind) {
+    case "shell":
+      return `${intention}$ ${String(r.fullCommandText ?? "")}`;
+    case "write":
+      return `${intention}${String(r.fileName ?? "")}\n${String(r.diff ?? "").slice(0, 2000)}`;
+    case "read":
+      return `${intention}${String(r.path ?? r.fileName ?? "")}`;
+    case "url":
+      return `${intention}${String(r.url ?? "")}`;
+    case "mcp":
+      return `${intention}${String(r.serverName ?? "")} / ${String(r.toolName ?? "")}`;
+    default:
+      return intention + JSON.stringify(r, null, 2).slice(0, 800);
   }
-  return JSON.stringify(r, null, 2).slice(0, 800);
 }

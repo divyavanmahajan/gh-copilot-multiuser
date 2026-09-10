@@ -16,10 +16,24 @@ import { GitHubAppProvider } from "./auth/github-app.js";
 import { GuestProvider } from "./auth/guest.js";
 import type { AuthProvider } from "./auth/provider.js";
 import { COOKIE_NAME, SessionStore } from "./auth/session-store.js";
+import type { AgentFactory } from "./agent/agent.js";
+import { copilotAgentFactory } from "./agent/copilot.js";
 import { Room } from "./room/room.js";
 import { attachWebSocket } from "./ws.js";
 
-export async function startServer(config: Config): Promise<{ url: string; guestCode?: string }> {
+export interface ServerDeps {
+  /** Override the agent, e.g. with a fake in tests. Defaults to the Copilot SDK. */
+  agentFactory?: AgentFactory;
+}
+
+export interface RunningServer {
+  url: string;
+  port: number;
+  guestCode?: string;
+  close: () => Promise<void>;
+}
+
+export async function startServer(config: Config, deps: ServerDeps = {}): Promise<RunningServer> {
   const log = (m: string) => console.error(`[copilot-room] ${m}`);
   const secureCookies = config.publicUrl.startsWith("https://");
   const sessions = new SessionStore(config.cookieSecret ?? randomBytes(32).toString("hex"));
@@ -52,10 +66,16 @@ export async function startServer(config: Config): Promise<{ url: string; guestC
     name: config.roomName,
     repo: config.repo,
     model: config.model,
-    sessionId: config.sessionId,
     stateDir: config.stateDir,
-    copilotToken: config.copilotToken,
     permissionTimeoutMs: config.permissionTimeoutSeconds * 1000,
+    agentFactory:
+      deps.agentFactory ??
+      copilotAgentFactory({
+        repo: config.repo,
+        model: config.model,
+        sessionId: config.sessionId,
+        gitHubToken: config.copilotToken,
+      }),
     log,
   });
   await room.start();
@@ -85,17 +105,24 @@ export async function startServer(config: Config): Promise<{ url: string; guestC
     app.get("/", (c) => c.text("client not built; run `npm run build` or use `npm run dev`"));
   }
 
-  const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }) as Server;
+  const server = await new Promise<Server>((resolve) => {
+    const s = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, () => resolve(s as Server)) as Server;
+  });
   attachWebSocket(server, room, sessions, log);
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : config.port;
 
+  const close = async () => {
+    await room.stop();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  };
   const shutdown = async () => {
     log("shutting down");
-    await room.stop();
-    server.close();
+    await close();
     process.exit(0);
   };
   process.once("SIGINT", () => void shutdown());
   process.once("SIGTERM", () => void shutdown());
 
-  return { url: `http://${config.host}:${config.port}`, guestCode };
+  return { url: `http://${config.host}:${port}`, port, guestCode, close };
 }
