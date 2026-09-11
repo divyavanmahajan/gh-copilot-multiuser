@@ -7,7 +7,11 @@ import type { TranscriptEntry } from "../../protocol/messages.js";
  */
 export function Transcript({ entries }: { entries: TranscriptEntry[] }) {
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView({ block: "end" }), [entries.length]);
+  // Braces matter: scrollIntoView returns a scroll-completion promise in newer
+  // Chromium, and an effect that returns a non-function crashes the render.
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: "end" });
+  }, [entries.length]);
 
   const blocks = coalesce(entries);
   return (
