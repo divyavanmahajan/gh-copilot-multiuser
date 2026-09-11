@@ -21,6 +21,7 @@ import { COOKIE_NAME, SessionStore } from "./auth/session-store.js";
 import type { AgentFactory } from "./agent/agent.js";
 import { copilotAgentFactory } from "./agent/copilot.js";
 import { Room } from "./room/room.js";
+import { SettingsStore } from "./settings.js";
 import { attachWebSocket } from "./ws.js";
 
 export interface ServerDeps {
@@ -41,6 +42,15 @@ export async function startServer(config: Config, deps: ServerDeps = {}): Promis
   const sessions = new SessionStore(config.cookieSecret ?? randomBytes(32).toString("hex"));
   const admissions = new Admissions(config.stateDir, config.allow);
   await admissions.load();
+  const settings = new SettingsStore(config.stateDir, {
+    admission: {
+      github: config.github.publicAdmission,
+      entra: config.entra?.admission,
+      guest: config.guests.policy,
+    },
+  });
+  await settings.load();
+  log(`admission policy: ${JSON.stringify(settings.get().admission)} (hosts can change it in the UI)`);
 
   const providers: AuthProvider[] = [];
   if (config.github.clientId && config.github.clientSecret) {
@@ -53,21 +63,22 @@ export async function startServer(config: Config, deps: ServerDeps = {}): Promis
         webBase: config.github.webBase,
         allowed: config.github.allowed,
         hosts: config.github.hosts,
-        publicAdmission: config.github.publicAdmission,
+        publicAdmission: settings.policy("github"),
         admissions,
         secureCookies,
       }),
     );
-    if (!config.github.allowed && config.github.publicAdmission === "off") {
-      log("GitHub sign-in: no --org and --public-github off, so only --hosts and --allow entries can get in");
-    }
   } else {
     log("GITHUB_APP_CLIENT_ID/SECRET not set: GitHub sign-in disabled");
   }
   if (config.entra) {
     providers.push(
       new EntraProvider({
-        ...config.entra,
+        tenantId: config.entra.tenantId,
+        clientId: config.entra.clientId,
+        clientSecret: config.entra.clientSecret,
+        group: config.entra.group,
+        admission: settings.policy("entra"),
         publicUrl: config.publicUrl,
         hosts: config.github.hosts,
         admissions,
@@ -75,12 +86,10 @@ export async function startServer(config: Config, deps: ServerDeps = {}): Promis
       }),
     );
   }
-  let guestCode: string | undefined;
-  if (config.guests.policy !== "off") {
-    guestCode = config.guests.code ?? randomBytes(4).toString("hex");
-    providers.push(new GuestProvider({ policy: config.guests.policy, code: guestCode, secureCookies }));
-  }
-  if (providers.length === 0) throw new Error("no way to sign in: configure a GitHub App or enable guests");
+  // Guests are always mounted; the live policy decides whether they get in,
+  // so a host can switch guests on from the UI without a restart.
+  const guestCode = config.guests.code ?? randomBytes(4).toString("hex");
+  providers.push(new GuestProvider({ policy: settings.policy("guest"), code: guestCode, secureCookies }));
 
   const room = new Room({
     name: config.roomName,
@@ -88,6 +97,8 @@ export async function startServer(config: Config, deps: ServerDeps = {}): Promis
     model: config.model,
     stateDir: config.stateDir,
     permissionTimeoutMs: config.permissionTimeoutSeconds * 1000,
+    settings,
+    guestCode,
     onAdmission: async (identity, decision, by) => {
       await admissions.record(identity, decision, by.login);
       if (decision === "reject") sessions.revokeIdentity(identity.id);
@@ -113,17 +124,17 @@ export async function startServer(config: Config, deps: ServerDeps = {}): Promis
     const identity = sessions.lookup(getCookie(c, COOKIE_NAME));
     return identity ? c.json(identity) : c.json({ error: "unauthenticated" }, 401);
   });
-  app.get("/api/room", (c) =>
-    c.json({
+  app.get("/api/room", (c) => {
+    const { admission } = settings.get();
+    return c.json({
       name: config.roomName,
       mode: config.mode,
-      providers: providers.map((p) => p.name),
-      guestsPolicy: config.guests.policy,
-      publicGitHub: config.github.publicAdmission,
-      entraAdmission: config.entra?.admission ?? "off",
+      // Only sign-in methods that can currently succeed are offered.
+      providers: providers.map((p) => p.name).filter((n) => n !== "guest" || admission.guest !== "off"),
+      admission,
       sessionId: room.sessionId,
-    }),
-  );
+    });
+  });
 
   const webDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "web");
   if (existsSync(webDir)) {
@@ -152,5 +163,5 @@ export async function startServer(config: Config, deps: ServerDeps = {}): Promis
   process.once("SIGINT", () => void shutdown());
   process.once("SIGTERM", () => void shutdown());
 
-  return { url: `http://${config.host}:${port}`, port, guestCode, close };
+  return { url: `http://${config.host}:${port}`, port, guestCode: settings.get().admission.guest === "off" ? undefined : guestCode, close };
 }

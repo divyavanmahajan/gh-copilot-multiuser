@@ -32,11 +32,14 @@ approvals, and an attributed transcript.
 - Permission prompts routed to the prompt author (and hosts), with timeout
 - GitHub App sign-in (browser redirect or device code), org/team gate
 - Microsoft Entra ID sign-in (redirect with PKCE, or device code), tenant/group gate
-- Public sign-in with host approval: outsiders wait at the door until a host
-  admits them as viewer or participant from a card in the host's UI
+- Host approval by default for every sign-in type: newcomers wait at the
+  door until a host admits them as viewer or participant from a card in the
+  host's UI; org, team and group members skip the queue
+- Hosts change the admission policy per sign-in type from the UI; the
+  setting persists across restarts
 - Persisted admissions and an allow list, so a server with no host online
   still lets known people in
-- Optional guests with a join code, view-only or participating
+- Guests with a join code, badged as unverified
 - Append-only transcript, replayed to late joiners, doubles as audit log
 - Works on a corporate LAN with no tunnel; Docker image for a shared server
 

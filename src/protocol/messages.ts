@@ -53,6 +53,29 @@ export type AdmissionRequest = z.infer<typeof AdmissionRequest>;
 /** What a host can do with a pending (or already admitted) user. */
 export const AdmissionDecision = z.enum(["viewer", "member", "reject"]);
 export type AdmissionDecision = z.infer<typeof AdmissionDecision>;
+
+/**
+ * What happens to a signed-in user who is not a host, not on the allow list,
+ * has no remembered decision, and did not pass an automatic gate.
+ * `approve` (the default) parks them until a host decides.
+ */
+export const AdmissionPolicy = z.enum(["off", "approve", "viewer", "member"]);
+export type AdmissionPolicy = z.infer<typeof AdmissionPolicy>;
+
+/** Host-editable room settings. Persisted; changes apply to the next sign-in. */
+export const RoomSettings = z.object({
+  admission: z.object({
+    github: AdmissionPolicy,
+    entra: AdmissionPolicy,
+    guest: AdmissionPolicy,
+  }),
+});
+export type RoomSettings = z.infer<typeof RoomSettings>;
+
+export const RoomSettingsPatch = z.object({
+  admission: RoomSettings.shape.admission.partial().optional(),
+});
+export type RoomSettingsPatch = z.infer<typeof RoomSettingsPatch>;
 export type RoomStatus = z.infer<typeof RoomStatus>;
 
 export const PermissionDecision = z.enum(["approve-once", "approve-for-session", "reject"]);
@@ -108,6 +131,9 @@ export const ServerMessage = z.discriminatedUnion("type", [
     transcript: z.array(TranscriptEntry),
     /** Non-empty only for hosts. */
     pendingAdmissions: z.array(AdmissionRequest),
+    /** Hosts only: current settings and the guest join code. */
+    settings: RoomSettings.nullable(),
+    guestCode: z.string().nullable(),
   }),
   z.object({ type: z.literal("participants"), participants: z.array(Participant) }),
   /** Sent to a user who is signed in but not admitted yet. */
@@ -116,6 +142,8 @@ export const ServerMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("admission.decided"), role: Role.nullable() }),
   /** Sent to hosts whenever the waiting list changes. */
   z.object({ type: z.literal("admissions"), requests: z.array(AdmissionRequest) }),
+  /** Sent to hosts whenever settings change. */
+  z.object({ type: z.literal("settings"), settings: RoomSettings }),
   z.object({ type: z.literal("status"), status: RoomStatus }),
   z.object({ type: z.literal("queue"), queue: z.array(QueuedPrompt), current: QueuedPrompt.nullable() }),
   z.object({ type: z.literal("transcript"), entry: TranscriptEntry }),
@@ -144,11 +172,13 @@ export const ClientMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("turn.abort") }),
   /** Host admits, changes the role of, or rejects a user by identity id. */
   z.object({ type: z.literal("admission.decide"), userId: z.string(), decision: AdmissionDecision }),
+  /** Host changes room settings. */
+  z.object({ type: z.literal("settings.update"), patch: RoomSettingsPatch }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
 
 /** Rights derived from a role. Kept here so server and client agree. */
-export function can(role: Role, action: "prompt" | "approve" | "abort" | "withdrawOthers" | "admit"): boolean {
+export function can(role: Role, action: "prompt" | "approve" | "abort" | "withdrawOthers" | "admit" | "settings"): boolean {
   if (role === "pending") return false;
   switch (action) {
     case "prompt":
@@ -157,6 +187,7 @@ export function can(role: Role, action: "prompt" | "approve" | "abort" | "withdr
     case "abort":
     case "withdrawOthers":
     case "admit":
+    case "settings":
       return role === "host";
   }
 }

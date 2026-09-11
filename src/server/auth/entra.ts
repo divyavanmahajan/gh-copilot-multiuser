@@ -26,7 +26,8 @@ export interface EntraOptions {
   clientId: string;
   clientSecret?: string;
   group?: string;
-  admission: AdmissionPolicy;
+  /** Live admission policy for tenant users outside the group; hosts can change it at runtime. */
+  admission: () => AdmissionPolicy;
   publicUrl: string;
   hosts: string[];
   admissions: Admissions;
@@ -188,7 +189,7 @@ export class EntraProvider implements AuthProvider {
       identity: base,
       hosts: this.opts.hosts,
       gate,
-      policy: this.opts.admission,
+      policy: this.opts.admission(),
       admissions: this.opts.admissions,
     });
     if (!role) return "forbidden";

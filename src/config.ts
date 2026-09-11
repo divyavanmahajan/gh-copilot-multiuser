@@ -9,7 +9,6 @@ import path from "node:path";
 import { parseAllowList, type AdmissionPolicy, type AllowEntry } from "./server/auth/admissions.js";
 
 export type Mode = "laptop" | "server";
-export type GuestPolicy = "off" | "view" | "participate";
 
 export interface Config {
   mode: Mode;
@@ -34,8 +33,8 @@ export interface Config {
     allowed?: { org: string; team?: string };
     /** Logins (GitHub login or Entra UPN) that get the host role. */
     hosts: string[];
-    /** What happens to GitHub users outside the allowed org: refuse, wait for a host, or admit. */
-    publicAdmission: AdmissionPolicy;
+    /** Seed for the GitHub admission policy (outside --org). Hosts can change it in the UI. */
+    publicAdmission?: AdmissionPolicy;
     apiBase: string;
     webBase: string;
   };
@@ -46,13 +45,14 @@ export interface Config {
     clientSecret?: string;
     /** Optional group object id; membership required via the `groups` claim. */
     group?: string;
-    /** Policy for tenant users outside the group (or all users when no group). */
-    admission: AdmissionPolicy;
+    /** Seed for the Entra admission policy (outside the group). Hosts can change it in the UI. */
+    admission?: AdmissionPolicy;
   };
   /** Pre-approved logins, e.g. for a server with no host online. */
   allow: AllowEntry[];
   guests: {
-    policy: GuestPolicy;
+    /** Seed for the guest admission policy. Hosts can change it in the UI. */
+    policy?: AdmissionPolicy;
     /** Join code guests must present. Generated at startup when unset. */
     code?: string;
   };
@@ -102,9 +102,9 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env): Con
   const publicUrl = (values["public-url"] ?? env.COPILOT_ROOM_PUBLIC_URL ?? `http://localhost:${port}`).replace(/\/$/, "");
   const orgSpec = values.org ?? env.COPILOT_ROOM_ORG;
   const [org, team] = orgSpec ? orgSpec.split("/") : [undefined, undefined];
-  const guests = (values.guests ?? env.COPILOT_ROOM_GUESTS ?? "off") as GuestPolicy;
-  const publicAdmission = policy(values["public-github"] ?? env.COPILOT_ROOM_PUBLIC_GITHUB, "off", "--public-github");
-  const entraAdmission = policy(values["entra-admission"] ?? env.COPILOT_ROOM_ENTRA_ADMISSION, "member", "--entra-admission");
+  const guests = policy(values.guests ?? env.COPILOT_ROOM_GUESTS, "--guests");
+  const publicAdmission = policy(values["public-github"] ?? env.COPILOT_ROOM_PUBLIC_GITHUB, "--public-github");
+  const entraAdmission = policy(values["entra-admission"] ?? env.COPILOT_ROOM_ENTRA_ADMISSION, "--entra-admission");
 
   return {
     mode,
@@ -144,8 +144,12 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env): Con
   };
 }
 
-function policy(value: string | undefined, fallback: AdmissionPolicy, flag: string): AdmissionPolicy {
-  if (value === undefined) return fallback;
+/** Parse an admission policy flag. Undefined means "not given, use the saved value or default". */
+function policy(value: string | undefined, flag: string): AdmissionPolicy | undefined {
+  if (value === undefined) return undefined;
+  // Aliases kept from the first release.
+  if (value === "view") return "viewer";
+  if (value === "participate") return "member";
   if (value === "off" || value === "approve" || value === "viewer" || value === "member") return value;
   throw new Error(`${flag} must be one of off, approve, viewer, member`);
 }
@@ -164,18 +168,18 @@ Usage: copilot-room [options]
   --model NAME          Copilot model to use (default: runtime default)
   --session-id ID       Resume a specific Copilot session
   --state-dir DIR       Room state directory (default: <repo>/.copilot-room)
-  --org ORG[/TEAM]      GitHub org or team whose members are admitted automatically
-  --public-github off|approve|viewer|member
-                        GitHub users outside the org: refuse, wait for a host, or
-                        admit as viewer/member (default: off)
-  --entra-group ID      Entra group object id whose members are admitted automatically
-  --entra-admission off|approve|viewer|member
-                        Entra tenant users outside the group (default: member)
-  --allow LIST          Pre-approved users: github:alice:member,entra:bob@corp.com:viewer
+  --org ORG[/TEAM]      GitHub org or team whose members skip host approval
+  --entra-group ID      Entra group object id whose members skip host approval
   --hosts a,b           GitHub logins or Entra UPNs with the host role
-  --guests off|view|participate
-                        Admit anonymous guests with a join code (default: off)
-  --guest-code CODE     Join code for guests (generated when unset)
+  --allow LIST          Pre-approved users: github:alice:member,entra:bob@corp.com:viewer
+
+  Admission policies (initial values; hosts change them in the UI and the
+  change persists): off = refuse, approve = a host admits (default),
+  viewer / member = admit at once.
+  --public-github POLICY    GitHub users outside --org
+  --entra-admission POLICY  Entra users outside --entra-group
+  --guests POLICY           anonymous guests presenting the join code
+  --guest-code CODE         join code for guests (generated when unset)
   --dev                 Serve the Vite dev client instead of dist/web
 
 Environment: GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET, ENTRA_TENANT_ID,
