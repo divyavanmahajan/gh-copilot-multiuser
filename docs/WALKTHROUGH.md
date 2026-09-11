@@ -154,6 +154,32 @@ steps are in ENTERPRISE-SETUP.md.
 Entra only accepts `https` redirect URIs (except localhost), so on a plain
 HTTP LAN use the **device code** button; it needs no redirect at all.
 
+### Keeping secrets out of your shell history
+
+Tenant and client ids are public identifiers, but the client secret is
+not, and an `export`/`$env:` line typed at a prompt is written to your
+shell history file. Put the values in a `.env` file in the repo root
+instead - `.gitignore` already excludes it - and `npm run dev` loads it:
+
+```sh
+ENTRA_TENANT_ID=00000000-0000-0000-0000-000000000000
+ENTRA_CLIENT_ID=11111111-1111-1111-1111-111111111111
+ENTRA_CLIENT_SECRET=...
+```
+
+Every entry point reads it - `npm run dev`, `npx copilot-room`, and the
+Docker image - because the CLI loads it before the config is parsed. The
+file is optional; nothing breaks without one. Restrict it to your own
+account (`chmod 600 .env`, or
+`icacls .env /inheritance:r /grant:r "$env:USERNAME:(R,W)"` on Windows).
+
+Precedence matches node's own `--env-file`: a variable already set in the
+environment beats the file, so `ENTRA_CLIENT_SECRET=... npx copilot-room`
+still wins over a stale `.env`. The file is read from the current working
+directory; set `COPILOT_ROOM_ENV_FILE` to point somewhere else, or to an
+empty string to skip it. In production prefer your process manager or
+container runtime - see DEPLOY.md.
+
 ## 5. Driving the agent together
 
 - **Send** a prompt when the status reads *idle*. It runs immediately and
