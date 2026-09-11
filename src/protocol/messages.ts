@@ -7,17 +7,18 @@
  */
 import { z } from "zod";
 
-export const Role = z.enum(["host", "member", "viewer"]);
+/** `pending` means signed in but not yet admitted by a host. */
+export const Role = z.enum(["host", "member", "viewer", "pending"]);
 export type Role = z.infer<typeof Role>;
 
-export const IdentityProvider = z.enum(["github", "guest"]);
+export const IdentityProvider = z.enum(["github", "entra", "guest"]);
 export type IdentityProvider = z.infer<typeof IdentityProvider>;
 
 export const Identity = z.object({
   /** Stable id: `github:<numeric id>` or `guest:<random>`. */
   id: z.string(),
   provider: IdentityProvider,
-  /** GitHub login, or the display name a guest chose. */
+  /** GitHub login, Entra user principal name, or the display name a guest chose. */
   login: z.string(),
   displayName: z.string(),
   avatarUrl: z.string().optional(),
@@ -41,6 +42,17 @@ export const QueuedPrompt = z.object({
 export type QueuedPrompt = z.infer<typeof QueuedPrompt>;
 
 export const RoomStatus = z.enum(["starting", "idle", "running", "error"]);
+
+/** A signed-in user waiting for a host to let them in. */
+export const AdmissionRequest = z.object({
+  identity: Identity,
+  requestedAt: z.string(),
+});
+export type AdmissionRequest = z.infer<typeof AdmissionRequest>;
+
+/** What a host can do with a pending (or already admitted) user. */
+export const AdmissionDecision = z.enum(["viewer", "member", "reject"]);
+export type AdmissionDecision = z.infer<typeof AdmissionDecision>;
 export type RoomStatus = z.infer<typeof RoomStatus>;
 
 export const PermissionDecision = z.enum(["approve-once", "approve-for-session", "reject"]);
@@ -94,8 +106,16 @@ export const ServerMessage = z.discriminatedUnion("type", [
     queue: z.array(QueuedPrompt),
     current: QueuedPrompt.nullable(),
     transcript: z.array(TranscriptEntry),
+    /** Non-empty only for hosts. */
+    pendingAdmissions: z.array(AdmissionRequest),
   }),
   z.object({ type: z.literal("participants"), participants: z.array(Participant) }),
+  /** Sent to a user who is signed in but not admitted yet. */
+  z.object({ type: z.literal("admission.pending"), you: Identity }),
+  /** Sent to that user once a host decides. `role` null means rejected. */
+  z.object({ type: z.literal("admission.decided"), role: Role.nullable() }),
+  /** Sent to hosts whenever the waiting list changes. */
+  z.object({ type: z.literal("admissions"), requests: z.array(AdmissionRequest) }),
   z.object({ type: z.literal("status"), status: RoomStatus }),
   z.object({ type: z.literal("queue"), queue: z.array(QueuedPrompt), current: QueuedPrompt.nullable() }),
   z.object({ type: z.literal("transcript"), entry: TranscriptEntry }),
@@ -122,18 +142,21 @@ export const ClientMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("typing"), typing: z.boolean() }),
   z.object({ type: z.literal("permission.respond"), requestId: z.string(), decision: PermissionDecision }),
   z.object({ type: z.literal("turn.abort") }),
+  /** Host admits, changes the role of, or rejects a user by identity id. */
+  z.object({ type: z.literal("admission.decide"), userId: z.string(), decision: AdmissionDecision }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
 
 /** Rights derived from a role. Kept here so server and client agree. */
-export function can(role: Role, action: "prompt" | "approve" | "abort" | "withdrawOthers"): boolean {
+export function can(role: Role, action: "prompt" | "approve" | "abort" | "withdrawOthers" | "admit"): boolean {
+  if (role === "pending") return false;
   switch (action) {
     case "prompt":
-      return role !== "viewer";
     case "approve":
       return role !== "viewer";
     case "abort":
     case "withdrawOthers":
+    case "admit":
       return role === "host";
   }
 }

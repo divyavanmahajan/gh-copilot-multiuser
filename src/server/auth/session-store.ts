@@ -4,7 +4,7 @@
  * out, which is acceptable for a tool that runs alongside a meeting.
  */
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import type { Identity } from "../../protocol/messages.js";
+import type { Identity, Role } from "../../protocol/messages.js";
 
 export const COOKIE_NAME = "copilot_room";
 
@@ -26,6 +26,20 @@ export class SessionStore {
     const expected = this.sign(token);
     if (expected.length !== sig.length || !timingSafeEqual(Buffer.from(expected), Buffer.from(sig))) return null;
     return this.sessions.get(token) ?? null;
+  }
+
+  /** Change the role on every browser session of one identity (admission, promotion). */
+  updateRole(identityId: string, role: Role): void {
+    for (const [token, identity] of this.sessions) {
+      if (identity.id === identityId) this.sessions.set(token, { ...identity, role });
+    }
+  }
+
+  /** Log an identity out everywhere, e.g. after a host rejects them. */
+  revokeIdentity(identityId: string): void {
+    for (const [token, identity] of this.sessions) {
+      if (identity.id === identityId) this.sessions.delete(token);
+    }
   }
 
   revoke(cookieValue: string | undefined): void {

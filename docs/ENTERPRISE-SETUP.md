@@ -24,6 +24,34 @@ For a GitHub Enterprise Cloud org running Copilot Enterprise.
    your agreement before rolling out, and keep `--guests participate` off
    unless everyone in the room holds a seat anyway.
 
+## Microsoft Entra ID (optional, for sign-in without GitHub)
+
+1. Entra admin center → App registrations → New registration.
+   Single tenant. Redirect URI (Web): `<public-url>/auth/entra/callback`.
+   Entra requires `https` here unless the host is `localhost`.
+2. Authentication → **Allow public client flows: Yes** if laptops will use
+   the device code sign-in (recommended on a plain-http LAN).
+3. Certificates & secrets → new client secret (server mode). Laptop mode
+   with device code works without one.
+4. Token configuration → Add groups claim → Security groups, if you want
+   `--entra-group` gating. Keep group membership small enough to avoid the
+   groups-overage case, or gate on org membership instead.
+5. API permissions: the default `openid`, `profile`, `email` are enough.
+   Grant admin consent so users are not prompted.
+6. Note the **Directory (tenant) ID** and **Application (client) ID**.
+
+Room settings: `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET`,
+`--entra-group`, `--entra-admission`. Hosts are named by user principal
+name in `--hosts`.
+
+## Public sign-in and admission
+
+`--public-github approve` lets any GitHub account sign in and wait for a
+host to admit them as viewer or participant. Use it for contractors and
+partners outside the org. Decisions are stored in `admissions.json` in the
+state directory; review it periodically and delete entries to revoke.
+`--allow` pre-approves named accounts for servers with no host online.
+
 ## Room host
 
 - Set `--org my-org` or `--org my-org/team-slug` so only members can join.

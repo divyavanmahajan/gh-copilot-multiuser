@@ -56,6 +56,23 @@ credentials whatever you want the agent to commit and push as.
 Register `http://devbox.corp.local:3000/auth/github/callback` as the
 GitHub App's callback URL. Internal hostnames are fine.
 
+## Sign-in options
+
+| Variable or flag | Effect |
+|---|---|
+| `GITHUB_APP_CLIENT_ID` / `_SECRET` | enables GitHub sign-in |
+| `--org ORG[/TEAM]` | org or team members admitted as participants |
+| `--public-github off\|approve\|viewer\|member` | other GitHub accounts: refuse, wait for a host, or admit |
+| `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET` | enables Microsoft Entra ID sign-in |
+| `--entra-group ID` | group members admitted as participants |
+| `--entra-admission off\|approve\|viewer\|member` | other tenant users (default: member) |
+| `--allow github:alice:member,entra:bob@corp.com:viewer` | pre-approved accounts |
+| `--hosts alice,bob@corp.com` | GitHub logins or Entra UPNs with the host role |
+
+Host decisions are stored in `admissions.json` under the state directory.
+Entra redirect sign-in needs an `https` public URL; the device code sign-in
+does not.
+
 ## HTTPS
 
 Optional. Terminate TLS in front (nginx, Caddy, a corporate ingress) and set

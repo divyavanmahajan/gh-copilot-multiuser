@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   can,
+  type AdmissionRequest,
   type Identity,
   type Participant,
   type QueuedPrompt,
@@ -14,6 +15,7 @@ import { Transcript } from "./components/Transcript.js";
 import { Queue } from "./components/Queue.js";
 import { Presence } from "./components/Presence.js";
 import { ApprovalCard, type PendingApproval } from "./components/ApprovalCard.js";
+import { AdmissionCard } from "./components/AdmissionCard.js";
 
 interface RoomInfo {
   name: string;
@@ -47,6 +49,8 @@ function RoomView() {
   const [current, setCurrent] = useState<QueuedPrompt | null>(null);
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [approvals, setApprovals] = useState<PendingApproval[]>([]);
+  const [admissions, setAdmissions] = useState<AdmissionRequest[]>([]);
+  const [gate, setGate] = useState<"open" | "waiting" | "rejected">("open");
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const typingTimer = useRef<number | null>(null);
@@ -55,6 +59,7 @@ function RoomView() {
     const off = socket.on((msg: ServerMessage) => {
       switch (msg.type) {
         case "hello":
+          setGate("open");
           setMe(msg.you);
           setRoom(msg.room);
           setStatus(msg.status);
@@ -62,6 +67,20 @@ function RoomView() {
           setQueue(msg.queue);
           setCurrent(msg.current);
           setTranscript(msg.transcript);
+          setAdmissions(msg.pendingAdmissions);
+          break;
+        case "admission.pending":
+          setMe(msg.you);
+          setGate("waiting");
+          break;
+        case "admission.decided":
+          if (msg.role === null) setGate("rejected");
+          // Otherwise a hello follows with the new role.
+          break;
+        case "admissions":
+          setAdmissions(msg.requests);
+          if (msg.requests.length > 0) document.title = `(${msg.requests.length}) copilot-room`;
+          else document.title = "copilot-room";
           break;
         case "participants":
           setParticipants(msg.participants);
@@ -111,6 +130,29 @@ function RoomView() {
     typingTimer.current = window.setTimeout(() => socket.send({ type: "typing", typing: false }), 3000);
   };
 
+  if (gate === "rejected") {
+    return (
+      <div className="waiting card">
+        <h2>Not admitted</h2>
+        <p>A host declined to let you into this room.</p>
+        <button className="secondary" onClick={() => fetch("/auth/logout", { method: "POST" }).then(() => location.reload())}>
+          Sign out
+        </button>
+      </div>
+    );
+  }
+  if (gate === "waiting" && me) {
+    return (
+      <div className="waiting card">
+        <h2>Waiting for a host</h2>
+        <p>
+          You are signed in as <strong>{me.displayName}</strong> ({me.login}). A host has been notified and will admit you as a
+          viewer or a participant.
+        </p>
+        <p className="who">Keep this tab open.</p>
+      </div>
+    );
+  }
   if (!me || !room) return <div className="login">Joining room…</div>;
   const canPrompt = can(me.role, "prompt");
 
@@ -135,6 +177,13 @@ function RoomView() {
       </header>
 
       <main>
+        {admissions.map((a) => (
+          <AdmissionCard
+            key={a.identity.id}
+            request={a}
+            onDecide={(decision) => socket.send({ type: "admission.decide", userId: a.identity.id, decision })}
+          />
+        ))}
         <Transcript entries={transcript} />
         {approvals.map((a) => (
           <ApprovalCard
@@ -149,7 +198,11 @@ function RoomView() {
 
       <aside>
         <h3>In the room</h3>
-        <Presence participants={participants} />
+        <Presence
+          participants={participants}
+          me={me}
+          onChangeRole={(userId, decision) => socket.send({ type: "admission.decide", userId, decision })}
+        />
         <h3>Queue</h3>
         <Queue
           current={current}
