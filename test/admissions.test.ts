@@ -59,7 +59,7 @@ describe("EntraProvider.identityFromClaims", () => {
     return new EntraProvider({
       tenantId: "t",
       clientId: "c",
-      admission: "member",
+      admission: () => "member",
       publicUrl: "http://localhost",
       hosts: ["boss@corp.com"],
       admissions: await fresh(),
@@ -77,10 +77,10 @@ describe("EntraProvider.identityFromClaims", () => {
   });
 
   it("gates on group membership when a group is configured", async () => {
-    const p = await provider({ group: "g-1", admission: "approve" });
+    const p = await provider({ group: "g-1", admission: () => "approve" });
     expect(p.identityFromClaims({ oid: "o3", upn: "in@corp.com", groups: ["g-1"] })).toMatchObject({ role: "member" });
     expect(p.identityFromClaims({ oid: "o4", upn: "out@corp.com", groups: [] })).toMatchObject({ role: "pending" });
-    const strict = await provider({ group: "g-1", admission: "off" });
+    const strict = await provider({ group: "g-1", admission: () => "off" });
     expect(strict.identityFromClaims({ oid: "o4", upn: "out@corp.com" })).toBe("forbidden");
   });
 });

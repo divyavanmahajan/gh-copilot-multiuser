@@ -2,7 +2,7 @@
  * End to end over real HTTP and WebSockets: guest sign-in, cookie, upgrade,
  * prompt, streamed transcript, presence.
  */
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import WebSocket from "ws";
@@ -98,8 +98,58 @@ describe("server", () => {
 
   it("serves the API for the login page", async () => {
     const res = await fetch(`${server.url}/api/room`);
-    expect(await res.json()).toMatchObject({ name: "e2e", providers: ["guest"], guestsPolicy: "participate" });
+    expect(await res.json()).toMatchObject({
+      name: "e2e",
+      providers: ["guest"],
+      admission: { github: "approve", entra: "approve", guest: "member" },
+    });
     const me = await fetch(`${server.url}/api/me`);
     expect(me.status).toBe(401);
+  });
+});
+
+describe("server with default admission", () => {
+  let dflt: RunningServer;
+  let stateDir: string;
+
+  beforeAll(async () => {
+    stateDir = await mkdtemp(path.join(tmpdir(), "room-e2e-default-"));
+    const config = loadConfig(["--port", "0", "--guest-code", "knock", "--state-dir", stateDir], {} as NodeJS.ProcessEnv);
+    dflt = await startServer(config, { agentFactory: fakeAgentFactory() });
+  });
+
+  afterAll(async () => {
+    await dflt.close();
+  });
+
+  it("makes guests wait for a host by default, and persists a host's policy change", async () => {
+    const res = await fetch(`${dflt.url}/auth/guest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "walk-in", code: "knock" }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, role: "pending" });
+    const cookie = res.headers.get("set-cookie")!.split(";")[0]!;
+
+    const ws = new WebSocket(dflt.url.replace("http", "ws") + "/ws", { headers: { cookie } });
+    const inbox: ServerMessage[] = [];
+    ws.on("message", (raw) => inbox.push(ServerMessage.parse(JSON.parse(raw.toString()))));
+    await waitFor(() => inbox.length > 0);
+    expect(inbox[0]?.type).toBe("admission.pending");
+    ws.close();
+
+    // A saved settings file wins over the default on the next start.
+    await writeFile(path.join(stateDir, "settings.json"), JSON.stringify({ admission: { guest: "viewer" } }));
+    await dflt.close();
+    dflt = await startServer(loadConfig(["--port", "0", "--guest-code", "knock", "--state-dir", stateDir], {} as NodeJS.ProcessEnv), {
+      agentFactory: fakeAgentFactory(),
+    });
+    const again = await fetch(`${dflt.url}/auth/guest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "walk-in", code: "knock" }),
+    });
+    expect(await again.json()).toEqual({ ok: true, role: "viewer" });
   });
 });

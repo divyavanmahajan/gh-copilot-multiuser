@@ -44,13 +44,16 @@ Room settings: `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET`,
 `--entra-group`, `--entra-admission`. Hosts are named by user principal
 name in `--hosts`.
 
-## Public sign-in and admission
+## Admission
 
-`--public-github approve` lets any GitHub account sign in and wait for a
-host to admit them as viewer or participant. Use it for contractors and
-partners outside the org. Decisions are stored in `admissions.json` in the
-state directory; review it periodically and delete entries to revoke.
-`--allow` pre-approves named accounts for servers with no host online.
+By default any GitHub or Microsoft account, and any guest with the join
+code, can sign in and then waits for a host to admit them as viewer or
+participant. Org, team and group members skip the wait. Hosts change the
+per-type policy in the UI (host approves, admit as viewer, admit as
+participant, refuse) and the setting persists in `settings.json`. Decisions
+about individuals are stored in `admissions.json`; review it periodically
+and delete entries to revoke. `--allow` pre-approves named accounts for
+servers with no host online.
 
 ## Room host
 

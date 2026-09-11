@@ -5,6 +5,7 @@ import {
   type Identity,
   type Participant,
   type QueuedPrompt,
+  type RoomSettings,
   type RoomStatus,
   type ServerMessage,
   type TranscriptEntry,
@@ -16,6 +17,7 @@ import { Queue } from "./components/Queue.js";
 import { Presence } from "./components/Presence.js";
 import { ApprovalCard, type PendingApproval } from "./components/ApprovalCard.js";
 import { AdmissionCard } from "./components/AdmissionCard.js";
+import { SettingsPanel } from "./components/SettingsPanel.js";
 
 interface RoomInfo {
   name: string;
@@ -50,6 +52,8 @@ function RoomView() {
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [approvals, setApprovals] = useState<PendingApproval[]>([]);
   const [admissions, setAdmissions] = useState<AdmissionRequest[]>([]);
+  const [settings, setSettings] = useState<RoomSettings | null>(null);
+  const [guestCode, setGuestCode] = useState<string | null>(null);
   const [gate, setGate] = useState<"open" | "waiting" | "rejected">("open");
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -68,6 +72,11 @@ function RoomView() {
           setCurrent(msg.current);
           setTranscript(msg.transcript);
           setAdmissions(msg.pendingAdmissions);
+          setSettings(msg.settings);
+          setGuestCode(msg.guestCode);
+          break;
+        case "settings":
+          setSettings(msg.settings);
           break;
         case "admission.pending":
           setMe(msg.you);
@@ -203,6 +212,16 @@ function RoomView() {
           me={me}
           onChangeRole={(userId, decision) => socket.send({ type: "admission.decide", userId, decision })}
         />
+        {settings && can(me.role, "settings") && (
+          <>
+            <h3>Admission</h3>
+            <SettingsPanel
+              settings={settings}
+              guestCode={guestCode}
+              onChange={(patch) => socket.send({ type: "settings.update", patch })}
+            />
+          </>
+        )}
         <h3>Queue</h3>
         <Queue
           current={current}

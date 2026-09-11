@@ -223,3 +223,51 @@ describe("Room admissions", () => {
     expect(host.inbox.at(-1)).toEqual({ type: "error", message: "that user is not here any more" });
   });
 });
+
+describe("Room settings", () => {
+  it("lets hosts change admission settings, persists them, and tells other hosts", async () => {
+    let current = { admission: { github: "approve" as const, entra: "approve" as const, guest: "approve" as const } };
+    const updates: unknown[] = [];
+    const room = new Room({
+      name: "test",
+      repo: "/repo",
+      stateDir: await mkdtemp(path.join(tmpdir(), "room-")),
+      permissionTimeoutMs: 200,
+      agentFactory: fakeAgentFactory(),
+      settings: {
+        get: () => current,
+        update: async (patch) => {
+          updates.push(patch);
+          current = { admission: { ...current.admission, ...patch.admission } } as typeof current;
+          return current;
+        },
+      },
+      guestCode: "knock",
+      log: () => {},
+    });
+    await room.start();
+    await waitFor(() => room.currentStatus === "idle");
+
+    const host = connect(room, identity("alice", "host"));
+    const other = connect(room, identity("zed", "host"));
+    const member = connect(room, identity("bob"));
+
+    const hello = host.inbox[0];
+    expect(hello?.type === "hello" && hello.settings?.admission.guest).toBe("approve");
+    expect(hello?.type === "hello" && hello.guestCode).toBe("knock");
+    const memberHello = member.inbox[0];
+    expect(memberHello?.type === "hello" && memberHello.settings).toBeNull();
+    expect(memberHello?.type === "hello" && memberHello.guestCode).toBeNull();
+
+    await room.handle(member.conn.id, { type: "settings.update", patch: { admission: { guest: "member" } } });
+    expect(member.inbox.at(-1)).toEqual({ type: "error", message: "only a host can change settings" });
+
+    await room.handle(host.conn.id, { type: "settings.update", patch: { admission: { guest: "viewer" } } });
+    expect(updates).toEqual([{ admission: { guest: "viewer" } }]);
+    const seenByOther = other.inbox.at(-1);
+    expect(seenByOther?.type === "settings" && seenByOther.settings.admission.guest).toBe("viewer");
+    expect(member.inbox.some((m) => m.type === "settings")).toBe(false);
+
+    await room.stop();
+  });
+});

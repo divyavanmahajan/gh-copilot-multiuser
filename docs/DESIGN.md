@@ -67,10 +67,15 @@ be serialized by the application. See
   tenant's keys), and guest (join code). Every provider ends in the same
   `resolveRole()` so admission rules live in one place.
 - **Admissions** (`src/server/auth/admissions.ts`). Who gets in and as
-  what: hosts list, then the provider's automatic gate (org/team, tenant/
-  group), then a stored decision or the allow list, then the provider's
-  public policy (refuse, wait for a host, viewer, member). Decisions persist
-  in `admissions.json`.
+  what: hosts list, then the provider's automatic gate (org/team, group),
+  then a stored decision or the allow list, then the provider's admission
+  policy (refuse, wait for a host, viewer, member). Decisions persist in
+  `admissions.json`.
+- **Settings** (`src/server/settings.ts`). Host-editable, persisted in
+  `settings.json`: one admission policy per sign-in type, default
+  `approve` for all. Providers read the policy live at sign-in, so a host's
+  change in the UI applies to the next person without a restart. Flags seed
+  the first start only.
 - **Protocol** (`src/protocol/messages.ts`). Zod schemas shared by server
   and browser; both sides validate every frame.
 - **Web client** (`src/web`). Vite + React. Transcript with streaming
@@ -117,10 +122,11 @@ sign-in ──► resolveRole ──► host / member ────────�
                                        admission.decided + hello, or rejected
 ```
 
-On a server with no host online the automatic paths carry the load: org,
-team, tenant or group gates, the allow list, remembered decisions, and a
-default-viewer policy. Anyone who still ends up waiting is shown to the
-next host who connects.
+Host approval is the default for every sign-in type. On a server with no
+host online the automatic paths carry the load: org, team or group gates,
+the allow list, remembered decisions, and a policy of admit-as-viewer set
+from the UI. Anyone who still ends up waiting is shown to the next host who
+connects.
 
 ### Copilot authentication and seats
 

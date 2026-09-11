@@ -1,13 +1,20 @@
 import { useEffect, useState } from "react";
 
+type Policy = "off" | "approve" | "viewer" | "member";
+
 interface RoomMeta {
   name: string;
   mode: "laptop" | "server";
   providers: string[];
-  guestsPolicy: "off" | "view" | "participate";
-  publicGitHub: "off" | "approve" | "viewer" | "member";
-  entraAdmission: "off" | "approve" | "viewer" | "member";
+  admission: { github: Policy; entra: Policy; guest: Policy };
 }
+
+const NOTE: Record<Policy, string> = {
+  approve: "a host admits you after sign-in",
+  viewer: "you join as a viewer",
+  member: "you join as a participant",
+  off: "members only",
+};
 
 interface DeviceFlow {
   provider: "github" | "entra";
@@ -94,7 +101,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
               ) : (
                 <a href="/auth/github/login"><button>Sign in with GitHub</button></a>
               )}
-              {meta.publicGitHub === "approve" && <span className="who">any GitHub account; a host admits you</span>}
+              <span className="who">{NOTE[meta.admission.github]}</span>
             </div>
           )}
           {entra && (
@@ -107,7 +114,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
               ) : (
                 <a href="/auth/entra/login"><button>Sign in with Microsoft</button></a>
               )}
-              {meta.entraAdmission === "approve" && <span className="who">a host admits you after sign-in</span>}
+              <span className="who">{NOTE[meta.admission.entra]}</span>
             </div>
           )}
         </div>
@@ -116,9 +123,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
       {guests && (
         <>
           <hr />
-          <p>
-            Join as a guest ({meta.guestsPolicy === "participate" ? "can prompt" : "view only"}). Guests are not verified.
-          </p>
+          <p>Join as a guest: {NOTE[meta.admission.guest]}. Guests are not verified.</p>
           <label>Your name</label>
           <input value={guest.name} onChange={(e) => setGuest({ ...guest, name: e.target.value })} />
           <label>Join code</label>

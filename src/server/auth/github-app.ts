@@ -9,9 +9,10 @@
  *
  * Scopes: read:org is enough for the membership gate.
  *
- * Admission: org/team members are admitted as members. Anyone else is
- * handled by `publicAdmission` (refuse, wait for a host, or admit directly),
- * unless a host already decided about them or they are on the allow list.
+ * Admission: org/team members are admitted as members. Anyone else waits
+ * for a host by default; the room's GitHub admission policy (host-editable)
+ * can instead refuse them or admit them directly. Remembered decisions and
+ * the allow list are honoured first.
  */
 import { randomBytes } from "node:crypto";
 import type { Hono } from "hono";
@@ -30,7 +31,8 @@ export interface GitHubAppOptions {
   webBase: string;
   allowed?: MembershipCheck;
   hosts: string[];
-  publicAdmission: AdmissionPolicy;
+  /** Live admission policy for users outside the org gate; hosts can change it at runtime. */
+  publicAdmission: () => AdmissionPolicy;
   admissions: Admissions;
   secureCookies: boolean;
 }
@@ -147,7 +149,7 @@ export class GitHubAppProvider implements AuthProvider {
       identity: base,
       hosts: this.opts.hosts,
       gate,
-      policy: this.opts.publicAdmission,
+      policy: this.opts.publicAdmission(),
       admissions: this.opts.admissions,
     });
     if (!role) return null;
