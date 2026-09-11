@@ -15,9 +15,9 @@
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { AdmissionDecision, Identity, IdentityProvider, Role } from "../../protocol/messages.js";
+import type { AdmissionDecision, AdmissionPolicy, Identity, IdentityProvider, Role } from "../../protocol/messages.js";
 
-export type AdmissionPolicy = "off" | "approve" | "viewer" | "member";
+export type { AdmissionPolicy };
 
 export interface AllowEntry {
   provider: IdentityProvider;

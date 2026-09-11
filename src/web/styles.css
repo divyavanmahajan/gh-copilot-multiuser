@@ -44,3 +44,6 @@ button:disabled { opacity: .5; cursor: default; }
 .login .providers { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
 .login .providers .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .login hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
+.settings-row { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+.settings-row .who { display: block; }
+.settings select { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font: inherit; }

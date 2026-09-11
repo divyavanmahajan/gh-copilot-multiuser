@@ -62,14 +62,18 @@ GitHub App's callback URL. Internal hostnames are fine.
 |---|---|
 | `GITHUB_APP_CLIENT_ID` / `_SECRET` | enables GitHub sign-in |
 | `--org ORG[/TEAM]` | org or team members admitted as participants |
-| `--public-github off\|approve\|viewer\|member` | other GitHub accounts: refuse, wait for a host, or admit |
+| `--public-github POLICY` | seed for other GitHub accounts (default: approve) |
 | `ENTRA_TENANT_ID`, `ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET` | enables Microsoft Entra ID sign-in |
 | `--entra-group ID` | group members admitted as participants |
-| `--entra-admission off\|approve\|viewer\|member` | other tenant users (default: member) |
+| `--entra-admission POLICY` | seed for other tenant users (default: approve) |
+| `--guests POLICY`, `--guest-code CODE` | seed for guests (default: approve) and their join code |
 | `--allow github:alice:member,entra:bob@corp.com:viewer` | pre-approved accounts |
 | `--hosts alice,bob@corp.com` | GitHub logins or Entra UPNs with the host role |
 
-Host decisions are stored in `admissions.json` under the state directory.
+POLICY is `off`, `approve`, `viewer` or `member`. Flags only seed the first
+start; hosts change policies in the UI and the value persists in
+`settings.json` under the state directory. Host decisions about individual
+people are stored next to it in `admissions.json`.
 Entra redirect sign-in needs an `https` public URL; the device code sign-in
 does not.
 
@@ -81,8 +85,9 @@ Optional. Terminate TLS in front (nginx, Caddy, a corporate ingress) and set
 
 ## Guests
 
-`--guests view` or `--guests participate` prints a join code at startup
-(or set `--guest-code`). Guests are unverified and badged as such.
+Guests are allowed by default and wait for a host. The join code is printed
+at startup and shown to hosts in the UI; set it with `--guest-code`. Guests
+are unverified and badged as such.
 
 ## Proxies
 

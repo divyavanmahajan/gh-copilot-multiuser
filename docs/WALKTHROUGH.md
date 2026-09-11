@@ -89,19 +89,23 @@ credentials for whatever identity you want commits pushed as.
    open the link in a new tab, enter the code. Server mode: click the
    sign-in button and approve.
 3. What happens next depends on who you are:
-   - Member of the allowed GitHub org or team, or of the Entra tenant or
-     group: you are in as a participant.
    - Listed in `--hosts`: you are in as a host.
-   - Anyone else with a GitHub or Microsoft account, when the host allows
-     public sign-in: you see **Waiting for a host**. Keep the tab open.
-   - Otherwise a 403 explains that your account is not allowed.
+   - Member of the allowed GitHub org or team, or of the Entra group: you
+     are in as a participant.
+   - On the allow list, or admitted by a host before: you are in with that
+     role.
+   - Everyone else, by default: you see **Waiting for a host**. Keep the
+     tab open. A host can change this default per sign-in type (see 4a).
 4. The room opens: transcript in the middle, participants and queue on the
    right, prompt box at the bottom. Your name and role sit top right.
 
 ## 4a. Admitting people (hosts)
 
-When someone signs in from outside the automatic gate, a green card appears
-at the top of every host's transcript and the tab title shows a count:
+Host approval is the default for every sign-in type: GitHub, Microsoft and
+guests. When someone signs in who is not a host, not an org, team or group
+member, not on the allow list and not previously admitted, a green card
+appears at the top of every host's transcript and the tab title shows a
+count:
 
 > Waiting to join · signed in with GitHub · 10:42
 > **Dana Example** `dana-gh`
@@ -112,15 +116,23 @@ Dana gets straight in next time, and a rejected account stays out until a
 host changes it. Hosts can also promote, demote or remove anyone from the
 participants panel with the arrow and cross buttons.
 
-Enable public sign-in with:
+### Changing the admission policy
 
-```sh
-# GitHub accounts outside --org wait for a host; Entra tenant users get in directly
-npx copilot-room --host 0.0.0.0 --org my-org --public-github approve --hosts alice
-```
+Hosts see an **Admission** panel on the right with one setting per sign-in
+type:
 
-`--public-github viewer` admits outsiders as viewers without asking, and a
-host can promote them later.
+| Setting | Effect on people outside the automatic gates |
+|---|---|
+| Host approves (default) | wait at the door until a host decides |
+| Admit as viewer | in immediately, view-only; a host can promote later |
+| Admit as participant | in immediately, can prompt |
+| Refuse | 403 at sign-in |
+
+The change takes effect for the next sign-in and is saved to
+`settings.json` in the state directory, so it survives restarts. Command
+line flags (`--public-github`, `--entra-admission`, `--guests`) only seed
+the value on the very first start; after that the saved setting wins. The
+panel also shows the guest join code when guests are allowed.
 
 ## 4b. Signing in with Microsoft Entra ID
 
@@ -134,10 +146,10 @@ npx copilot-room --host 0.0.0.0 --entra-group <group-object-id> --hosts alice@co
 ```
 
 Everyone in the tenant may sign in. With `--entra-group`, members of that
-group are participants and everyone else follows `--entra-admission`
-(default `member`; use `approve` to make hosts admit them). `--hosts`
-accepts Entra user principal names alongside GitHub logins. The app
-registration steps are in ENTERPRISE-SETUP.md.
+group are participants at once; everyone else follows the Microsoft
+admission setting, which defaults to host approval. `--hosts` accepts
+Entra user principal names alongside GitHub logins. The app registration
+steps are in ENTERPRISE-SETUP.md.
 
 Entra only accepts `https` redirect URIs (except localhost), so on a plain
 HTTP LAN use the **device code** button; it needs no redirect at all.
@@ -171,21 +183,27 @@ approval as the exception:
   from another org.
 - **Remembered decisions.** Once a host has admitted someone, the decision
   in `admissions.json` lets them in on every later visit, host or no host.
-- **Default viewer.** `--public-github viewer` or `--entra-admission viewer`
-  lets outsiders watch immediately; a host promotes them when one is around.
+- **Default viewer.** Set a sign-in type to *Admit as viewer* in the
+  Admission panel (or seed it with `--public-github viewer`); outsiders can
+  watch immediately and a host promotes them when one is around.
 - **Waiting still works.** People who do end up waiting stay on the waiting
   screen, and the next host to connect sees the cards and can decide.
 
-## 6. Guests without GitHub accounts (optional)
+## 6. Guests without GitHub or Microsoft accounts
+
+Guests are people with only a name and the join code. They are allowed by
+default and, like everyone else, wait for a host to admit them. The join
+code is printed at startup and shown in the hosts' Admission panel; pin it
+with `--guest-code`:
 
 ```sh
-npx copilot-room --host 0.0.0.0 --org my-org --guests view --guest-code kiwi-42
+npx copilot-room --host 0.0.0.0 --org my-org --guest-code kiwi-42
 ```
 
-Guests enter a name and the code. `--guests view` lets them watch;
-`--guests participate` also lets them prompt. Guests are badged in the UI
-and transcript and can never be hosts. Leave participation off unless
-everyone in the room holds a Copilot seat anyway.
+Switch guests to *Refuse* in the Admission panel (or seed `--guests off`)
+for a members-only room. Guests are badged in the UI and transcript and
+can never be hosts. Think twice before admitting guests as participants
+unless everyone in the room holds a Copilot seat anyway.
 
 ## 7. Stopping and resuming
 
@@ -216,7 +234,7 @@ Registry. Users then get the new version with `npx copilot-room@latest` or
 | Device flow says "failed: incorrect_client_credentials" | wrong client id | re-copy from the app page |
 | Browser redirect sign-in loops | callback URL mismatch | the app's callback must equal `--public-url` + `/auth/github/callback` |
 | Colleagues get connection refused | bound to localhost | add `--host 0.0.0.0` |
-| "Waiting for a host" never ends | no host connected | a host opens the room, or use `--allow` / `--public-github viewer` |
+| "Waiting for a host" never ends | no host connected | a host opens the room, or use `--allow` / set the type to *Admit as viewer* |
 | Microsoft redirect sign-in fails with AADSTS50011 | redirect URI mismatch or http | register `<public-url>/auth/entra/callback` (https) or use the device code |
 | Microsoft device code fails with AADSTS7000218 | public client flows disabled | enable "Allow public client flows" on the app registration |
 | Entra group gate rejects members | `groups` claim missing | add the groups claim to the ID token in Token configuration |

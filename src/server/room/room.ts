@@ -16,6 +16,8 @@ import {
   type Identity,
   type Participant,
   type QueuedPrompt,
+  type RoomSettings,
+  type RoomSettingsPatch,
   type RoomStatus,
   type ServerMessage,
   type TranscriptEntry,
@@ -31,6 +33,13 @@ export interface RoomOptions {
   agentFactory: AgentFactory;
   /** Persist a host's admission decision and update browser sessions. */
   onAdmission?: (identity: Identity, decision: AdmissionDecision, by: Identity) => Promise<void> | void;
+  /** Host-editable settings. Absent means the room has no settings UI. */
+  settings?: {
+    get: () => RoomSettings;
+    update: (patch: RoomSettingsPatch) => Promise<RoomSettings>;
+  };
+  /** Shown to hosts so they can hand it out. */
+  guestCode?: string;
   log: (msg: string) => void;
 }
 
@@ -131,6 +140,8 @@ export class Room {
       current: snap.current,
       transcript: this.transcript.tail(),
       pendingAdmissions: conn.identity.role === "host" ? this.pendingAdmissions() : [],
+      settings: conn.identity.role === "host" ? (this.opts.settings?.get() ?? null) : null,
+      guestCode: conn.identity.role === "host" ? (this.opts.guestCode ?? null) : null,
     });
   }
 
@@ -237,6 +248,17 @@ export class Room {
         if (!can(identity.role, "admit")) return conn.send({ type: "error", message: "only a host can admit people" });
         if (!(await this.decideAdmission(msg.userId, msg.decision, identity))) {
           conn.send({ type: "error", message: "that user is not here any more" });
+        }
+        return;
+      }
+
+      case "settings.update": {
+        if (!can(identity.role, "settings")) return conn.send({ type: "error", message: "only a host can change settings" });
+        if (!this.opts.settings) return conn.send({ type: "error", message: "settings are fixed for this room" });
+        const settings = await this.opts.settings.update(msg.patch);
+        this.opts.log(`${identity.login} changed admission policy: ${JSON.stringify(settings.admission)}`);
+        for (const c of this.connections.values()) {
+          if (c.identity.role === "host") c.send({ type: "settings", settings });
         }
         return;
       }
