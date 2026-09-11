@@ -194,6 +194,10 @@ container runtime - see DEPLOY.md.
 - **Attribution.** The agent sees `[alice]: …` and `[bob]: …`, so ask it
   "what did Bob ask for earlier" and it knows.
 - **Late joiners** get the transcript replayed on entry.
+- **Formatting.** The agent's replies are rendered as markdown, so headings,
+  lists, tables, links and fenced code blocks come out formatted. Your own
+  prompts and the tool lines stay as literal text, so you can see exactly
+  what was asked and exactly what was run.
 
 ## 5a. Server mode without a host online
 
