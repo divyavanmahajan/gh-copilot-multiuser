@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { TranscriptEntry } from "../../protocol/messages.js";
 
 /**
@@ -19,7 +21,16 @@ export function Transcript({ entries }: { entries: TranscriptEntry[] }) {
       {blocks.map((b) => (
         <div key={b.key} className={`entry ${b.cls}`}>
           {b.who && <div className="who">{b.who}</div>}
-          <pre>{b.text}</pre>
+          {b.cls === "assistant" ? (
+            // Copilot answers in markdown. react-markdown builds elements rather
+            // than setting innerHTML, so model output cannot inject HTML, and a
+            // half-finished stream just renders as the plain text it is so far.
+            <div className="md">
+              <Markdown remarkPlugins={[remarkGfm]}>{b.text}</Markdown>
+            </div>
+          ) : (
+            <pre>{b.text}</pre>
+          )}
         </div>
       ))}
       <div ref={end} />
