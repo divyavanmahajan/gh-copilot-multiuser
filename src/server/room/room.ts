@@ -10,6 +10,8 @@ import { PromptQueue } from "../agent/queue.js";
 import { Transcript } from "./transcript.js";
 import {
   can,
+  type AdmissionDecision,
+  type AdmissionRequest,
   type ClientMessage,
   type Identity,
   type Participant,
@@ -27,6 +29,8 @@ export interface RoomOptions {
   permissionTimeoutMs: number;
   /** Builds the agent once the room has wired its callbacks. */
   agentFactory: AgentFactory;
+  /** Persist a host's admission decision and update browser sessions. */
+  onAdmission?: (identity: Identity, decision: AdmissionDecision, by: Identity) => Promise<void> | void;
   log: (msg: string) => void;
 }
 
@@ -38,6 +42,8 @@ export interface Connection {
 
 export class Room {
   private readonly connections = new Map<string, Connection & { typing: boolean; connectedAt: string }>();
+  /** Signed in, waiting for a host. Not participants yet; they see nothing. */
+  private readonly waiting = new Map<string, Connection & { requestedAt: string }>();
   private readonly queue = new PromptQueue();
   private readonly transcript: Transcript;
   private readonly permissions: PermissionRouter;
@@ -93,7 +99,27 @@ export class Room {
   // --- connections ---------------------------------------------------------
 
   join(conn: Connection): void {
+    if (conn.identity.role === "pending") {
+      this.waiting.set(conn.id, { ...conn, requestedAt: now() });
+      conn.send({ type: "admission.pending", you: conn.identity });
+      this.notifyHosts();
+      return;
+    }
     this.connections.set(conn.id, { ...conn, typing: false, connectedAt: now() });
+    this.sendHello(conn);
+    this.broadcast({ type: "participants", participants: this.participants() });
+  }
+
+  leave(connId: string): void {
+    if (this.waiting.delete(connId)) {
+      this.notifyHosts();
+      return;
+    }
+    this.connections.delete(connId);
+    this.broadcast({ type: "participants", participants: this.participants() });
+  }
+
+  private sendHello(conn: Connection): void {
     const snap = this.queue.snapshot();
     conn.send({
       type: "hello",
@@ -104,13 +130,65 @@ export class Room {
       queue: snap.queue,
       current: snap.current,
       transcript: this.transcript.tail(),
+      pendingAdmissions: conn.identity.role === "host" ? this.pendingAdmissions() : [],
     });
-    this.broadcast({ type: "participants", participants: this.participants() });
   }
 
-  leave(connId: string): void {
-    this.connections.delete(connId);
+  /** One request per waiting identity, even with several tabs open. */
+  pendingAdmissions(): AdmissionRequest[] {
+    const byId = new Map<string, AdmissionRequest>();
+    for (const w of this.waiting.values()) {
+      const existing = byId.get(w.identity.id);
+      if (!existing || existing.requestedAt > w.requestedAt) byId.set(w.identity.id, { identity: w.identity, requestedAt: w.requestedAt });
+    }
+    return [...byId.values()].sort((a, b) => a.requestedAt.localeCompare(b.requestedAt));
+  }
+
+  private notifyHosts(): void {
+    const requests = this.pendingAdmissions();
+    for (const c of this.connections.values()) {
+      if (c.identity.role === "host") c.send({ type: "admissions", requests });
+    }
+  }
+
+  /**
+   * A host admits, re-roles, or rejects a user. Applies to every connection
+   * of that identity: waiting ones become participants (or are told no),
+   * participants get their new role and a fresh hello.
+   */
+  private async decideAdmission(userId: string, decision: AdmissionDecision, by: Identity): Promise<boolean> {
+    const waiting = [...this.waiting.entries()].filter(([, w]) => w.identity.id === userId);
+    const present = [...this.connections.entries()].filter(([, c]) => c.identity.id === userId);
+    if (waiting.length === 0 && present.length === 0) return false;
+    const subject = (waiting[0]?.[1] ?? present[0]?.[1])!.identity;
+    if (subject.role === "host") return false; // hosts are configured, not decided on
+
+    await this.opts.onAdmission?.(subject, decision, by);
+
+    for (const [id, w] of waiting) {
+      this.waiting.delete(id);
+      if (decision === "reject") {
+        w.send({ type: "admission.decided", role: null });
+        continue;
+      }
+      const admitted: Connection = { ...w, identity: { ...w.identity, role: decision } };
+      this.connections.set(id, { ...admitted, typing: false, connectedAt: now() });
+      admitted.send({ type: "admission.decided", role: decision });
+      this.sendHello(admitted);
+    }
+    for (const [id, c] of present) {
+      if (decision === "reject") {
+        this.connections.delete(id);
+        c.send({ type: "admission.decided", role: null });
+        continue;
+      }
+      c.identity = { ...c.identity, role: decision };
+      c.send({ type: "admission.decided", role: decision });
+      this.sendHello(c);
+    }
     this.broadcast({ type: "participants", participants: this.participants() });
+    this.notifyHosts();
+    return true;
   }
 
   async handle(connId: string, msg: ClientMessage): Promise<void> {
@@ -152,6 +230,14 @@ export class Room {
         this.permissions.rejectAll();
         await this.agent.abort();
         this.onTurnFinished("aborted");
+        return;
+      }
+
+      case "admission.decide": {
+        if (!can(identity.role, "admit")) return conn.send({ type: "error", message: "only a host can admit people" });
+        if (!(await this.decideAdmission(msg.userId, msg.decision, identity))) {
+          conn.send({ type: "error", message: "that user is not here any more" });
+        }
         return;
       }
     }

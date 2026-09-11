@@ -62,8 +62,15 @@ be serialized by the application. See
   prompt, who answered each permission request. Replayed to late joiners.
   This is also the audit trail.
 - **Auth** (`src/server/auth`). Pluggable providers producing one
-  `Identity` shape. GitHub App (web flow and device flow) and guest (join
-  code) exist. Corporate OIDC is the planned third.
+  `Identity` shape: GitHub App (web flow and device flow), Microsoft Entra
+  ID (OIDC web flow with PKCE and device flow, tokens verified against the
+  tenant's keys), and guest (join code). Every provider ends in the same
+  `resolveRole()` so admission rules live in one place.
+- **Admissions** (`src/server/auth/admissions.ts`). Who gets in and as
+  what: hosts list, then the provider's automatic gate (org/team, tenant/
+  group), then a stored decision or the allow list, then the provider's
+  public policy (refuse, wait for a host, viewer, member). Decisions persist
+  in `admissions.json`.
 - **Protocol** (`src/protocol/messages.ts`). Zod schemas shared by server
   and browser; both sides validate every frame.
 - **Web client** (`src/web`). Vite + React. Transcript with streaming
@@ -72,22 +79,48 @@ be serialized by the application. See
 ### Identity and roles
 
 ```
-Identity { id, provider: github | guest, login, displayName, role }
-Role     host | member | viewer
+Identity { id, provider: github | entra | guest, login, displayName, role }
+Role     host | member | viewer | pending
 ```
 
-| Action | viewer | member | host |
-|---|---|---|---|
-| watch | ✓ | ✓ | ✓ |
-| submit prompt | | ✓ | ✓ |
-| withdraw own prompt | | ✓ | ✓ |
-| withdraw anyone's prompt | | | ✓ |
-| answer permission prompt | | if author | ✓ |
-| abort running turn | | | ✓ |
+| Action | pending | viewer | member | host |
+|---|---|---|---|---|
+| watch | | ✓ | ✓ | ✓ |
+| submit prompt | | | ✓ | ✓ |
+| withdraw own prompt | | | ✓ | ✓ |
+| withdraw anyone's prompt | | | | ✓ |
+| answer permission prompt | | | if author | ✓ |
+| abort running turn | | | | ✓ |
+| admit, re-role, remove people | | | | ✓ |
 
-GitHub users are `member` unless listed in `--hosts`. Guests are `viewer`
-or `member` depending on `--guests view|participate`, never `host`. Guest
-identity is unverified and is badged as such in the UI and the transcript.
+`pending` is a signed-in user parked at the door. They hold a WebSocket but
+receive nothing except the decision. Hosts see one card per waiting
+identity and choose viewer, participant, or reject; the decision is
+persisted and applied to every tab that identity has open. Hosts are
+configured (`--hosts`), never decided on.
+
+Guests are `viewer` or `member` depending on `--guests view|participate`,
+never `host`. Guest identity is unverified and is badged as such in the UI
+and the transcript.
+
+### Admission flow
+
+```
+sign-in ──► resolveRole ──► host / member ─────────────► hello
+                │
+                ├─► stored decision / allow list ──────► hello (or 403)
+                │
+                └─► policy: approve ──► admission.pending ──► host card
+                                                              │
+                                             admission.decide ┘
+                                                              ▼
+                                       admission.decided + hello, or rejected
+```
+
+On a server with no host online the automatic paths carry the load: org,
+team, tenant or group gates, the allow list, remembered decisions, and a
+default-viewer policy. Anyone who still ends up waiting is shown to the
+next host who connects.
 
 ### Copilot authentication and seats
 
@@ -132,8 +165,9 @@ Acceptance: two browsers on different GitHub accounts submit prompts
 alternately; both see identical streamed output; the second prompt waits
 for the first turn.
 
-**M2:** corporate OIDC provider, optional Copilot seat verification with an
-admin token, voting on destructive actions, per-kind auto-approval rules.
+**M2 (partly done):** Microsoft Entra ID sign-in and host-approved public
+sign-in are in. Remaining: optional Copilot seat verification with an admin
+token, voting on destructive actions, per-kind auto-approval rules.
 
 **M3:** multiple rooms per server, Slack/Teams bridge, mid-turn steering.
 

@@ -8,11 +8,16 @@
  *    shows the code, /auth/github/device/poll completes it. No callback URL.
  *
  * Scopes: read:org is enough for the membership gate.
+ *
+ * Admission: org/team members are admitted as members. Anyone else is
+ * handled by `publicAdmission` (refuse, wait for a host, or admit directly),
+ * unless a host already decided about them or they are on the allow list.
  */
 import { randomBytes } from "node:crypto";
 import type { Hono } from "hono";
 import { setCookie } from "hono/cookie";
-import type { Identity, Role } from "../../protocol/messages.js";
+import type { Identity } from "../../protocol/messages.js";
+import { resolveRole, type Admissions, type AdmissionPolicy } from "./admissions.js";
 import { isMember, type MembershipCheck } from "./membership.js";
 import type { AuthProvider } from "./provider.js";
 import { COOKIE_NAME } from "./session-store.js";
@@ -25,6 +30,8 @@ export interface GitHubAppOptions {
   webBase: string;
   allowed?: MembershipCheck;
   hosts: string[];
+  publicAdmission: AdmissionPolicy;
+  admissions: Admissions;
   secureCookies: boolean;
 }
 
@@ -61,7 +68,7 @@ export class GitHubAppProvider implements AuthProvider {
       if (!code || !state || !this.pendingStates.delete(state)) return c.text("invalid OAuth state", 400);
       const token = await this.exchangeCode(code);
       const identity = await this.identityFor(token);
-      if (!identity) return c.text("you are not a member of the allowed organization", 403);
+      if (!identity) return c.text("your GitHub account is not allowed into this room", 403);
       setCookie(c, COOKIE_NAME, await issue(identity), this.cookieOptions());
       return c.redirect("/");
     });
@@ -134,15 +141,16 @@ export class GitHubAppProvider implements AuthProvider {
     });
     if (res.status !== 200) return null;
     const user = (await res.json()) as GitHubUser;
-    if (this.opts.allowed && !(await isMember(this.opts.apiBase, userToken, user.login, this.opts.allowed))) return null;
-    const role: Role = this.opts.hosts.includes(user.login) ? "host" : "member";
-    return {
-      id: `github:${user.id}`,
-      provider: "github",
-      login: user.login,
-      displayName: user.name ?? user.login,
-      avatarUrl: user.avatar_url,
-      role,
-    };
+    const base = { id: `github:${user.id}`, provider: "github" as const, login: user.login };
+    const gate = this.opts.allowed ? await isMember(this.opts.apiBase, userToken, user.login, this.opts.allowed) : null;
+    const role = resolveRole({
+      identity: base,
+      hosts: this.opts.hosts,
+      gate,
+      policy: this.opts.publicAdmission,
+      admissions: this.opts.admissions,
+    });
+    if (!role) return null;
+    return { ...base, displayName: user.name ?? user.login, avatarUrl: user.avatar_url, role };
   }
 }

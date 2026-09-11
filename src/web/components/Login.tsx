@@ -5,11 +5,21 @@ interface RoomMeta {
   mode: "laptop" | "server";
   providers: string[];
   guestsPolicy: "off" | "view" | "participate";
+  publicGitHub: "off" | "approve" | "viewer" | "member";
+  entraAdmission: "off" | "approve" | "viewer" | "member";
+}
+
+interface DeviceFlow {
+  provider: "github" | "entra";
+  flowId: string;
+  userCode: string;
+  verificationUri: string;
+  interval: number;
 }
 
 export function Login({ onSignedIn }: { onSignedIn: () => void }) {
   const [meta, setMeta] = useState<RoomMeta | null>(null);
-  const [device, setDevice] = useState<{ flowId: string; userCode: string; verificationUri: string; interval: number } | null>(null);
+  const [device, setDevice] = useState<DeviceFlow | null>(null);
   const [guest, setGuest] = useState({ name: "", code: "" });
   const [err, setErr] = useState<string | null>(null);
 
@@ -17,11 +27,11 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
     fetch("/api/room").then((r) => r.json()).then((j) => setMeta(j as RoomMeta));
   }, []);
 
-  // Device flow: poll until GitHub reports success.
+  // Device flow: poll until the identity provider reports success.
   useEffect(() => {
     if (!device) return;
     const t = window.setInterval(async () => {
-      const r = await fetch("/auth/github/device/poll", {
+      const r = await fetch(`/auth/${device.provider}/device/poll`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ flowId: device.flowId }),
@@ -29,16 +39,19 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
       const j = (await r.json()) as { status: string; error?: string };
       if (j.status === "ok") onSignedIn();
       else if (j.status !== "pending") {
-        setErr(j.status === "forbidden" ? "You are not a member of the allowed organization." : `Sign-in failed: ${j.error ?? j.status}`);
+        setErr(j.status === "forbidden" ? "Your account is not allowed into this room." : `Sign-in failed: ${j.error ?? j.status}`);
         setDevice(null);
       }
     }, (device.interval + 1) * 1000);
     return () => window.clearInterval(t);
   }, [device, onSignedIn]);
 
-  const startDevice = async () => {
-    const r = await fetch("/auth/github/device", { method: "POST" });
-    setDevice((await r.json()) as typeof device);
+  const startDevice = async (provider: "github" | "entra") => {
+    setErr(null);
+    const r = await fetch(`/auth/${provider}/device`, { method: "POST" });
+    const j = (await r.json()) as Omit<DeviceFlow, "provider"> & { error?: string };
+    if (!r.ok) return setErr(j.error ?? "could not start device sign-in");
+    setDevice({ provider, ...j });
   };
 
   const joinAsGuest = async () => {
@@ -53,7 +66,9 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
 
   if (!meta) return <div className="login">Loading…</div>;
   const github = meta.providers.includes("github");
+  const entra = meta.providers.includes("entra");
   const guests = meta.providers.includes("guest");
+  const laptop = meta.mode === "laptop";
 
   return (
     <div className="login card">
@@ -61,31 +76,46 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
       <p>One Copilot agent, one repo, everyone in the room.</p>
       {err && <p style={{ color: "var(--danger)" }}>{err}</p>}
 
-      {github && !device && (
-        <p>
-          {meta.mode === "server" ? (
-            <a href="/auth/github/login"><button>Sign in with GitHub</button></a>
-          ) : (
-            <button onClick={startDevice}>Sign in with GitHub (device code)</button>
-          )}
-          {meta.mode === "laptop" && (
-            <>
-              {" "}
-              <a href="/auth/github/login"><button className="secondary">use browser redirect instead</button></a>
-            </>
-          )}
-        </p>
-      )}
-      {device && (
+      {device ? (
         <p>
           Open <a href={device.verificationUri} target="_blank" rel="noreferrer">{device.verificationUri}</a> and enter{" "}
-          <strong style={{ fontSize: 20, letterSpacing: 2 }}>{device.userCode}</strong>. Waiting…
+          <strong style={{ fontSize: 20, letterSpacing: 2 }}>{device.userCode}</strong>. Waiting…{" "}
+          <button className="secondary" onClick={() => setDevice(null)}>cancel</button>
         </p>
+      ) : (
+        <div className="providers">
+          {github && (
+            <div className="row">
+              {laptop ? (
+                <>
+                  <button onClick={() => startDevice("github")}>Sign in with GitHub (device code)</button>
+                  <a href="/auth/github/login"><button className="secondary">browser redirect</button></a>
+                </>
+              ) : (
+                <a href="/auth/github/login"><button>Sign in with GitHub</button></a>
+              )}
+              {meta.publicGitHub === "approve" && <span className="who">any GitHub account; a host admits you</span>}
+            </div>
+          )}
+          {entra && (
+            <div className="row">
+              {laptop ? (
+                <>
+                  <button onClick={() => startDevice("entra")}>Sign in with Microsoft (device code)</button>
+                  <a href="/auth/entra/login"><button className="secondary">browser redirect</button></a>
+                </>
+              ) : (
+                <a href="/auth/entra/login"><button>Sign in with Microsoft</button></a>
+              )}
+              {meta.entraAdmission === "approve" && <span className="who">a host admits you after sign-in</span>}
+            </div>
+          )}
+        </div>
       )}
 
       {guests && (
         <>
-          <hr style={{ borderColor: "var(--border)" }} />
+          <hr />
           <p>
             Join as a guest ({meta.guestsPolicy === "participate" ? "can prompt" : "view only"}). Guests are not verified.
           </p>
