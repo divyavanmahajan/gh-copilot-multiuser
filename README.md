@@ -49,6 +49,7 @@ approvals, and an attributed transcript.
 - [docs/DESIGN.md](docs/DESIGN.md): architecture and milestones
 - [docs/DEPLOY.md](docs/DEPLOY.md): laptop mode, server mode, HTTPS, proxies
 - [docs/ENTERPRISE-SETUP.md](docs/ENTERPRISE-SETUP.md): GitHub App and policy checklist
+- [docs/PUBLISHING.md](docs/PUBLISHING.md): cutting a release to npm and GHCR
 
 ## Development
 
