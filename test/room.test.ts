@@ -140,3 +140,86 @@ describe("Room", () => {
     );
   });
 });
+
+describe("Room admissions", () => {
+  let room: Room;
+  const decisions: string[] = [];
+
+  beforeEach(async () => {
+    decisions.length = 0;
+    room = new Room({
+      name: "test",
+      repo: "/repo",
+      stateDir: await mkdtemp(path.join(tmpdir(), "room-")),
+      permissionTimeoutMs: 200,
+      agentFactory: fakeAgentFactory(),
+      onAdmission: (identity, decision, by) => void decisions.push(`${by.login}:${decision}:${identity.login}`),
+      log: () => {},
+    });
+    await room.start();
+    await waitFor(() => room.currentStatus === "idle");
+  });
+
+  afterEach(async () => {
+    await room.stop();
+  });
+
+  it("parks pending users, tells hosts, and admits them with the chosen role", async () => {
+    const host = connect(room, identity("alice", "host"));
+    const dan = connect(room, identity("dan", "pending"));
+
+    expect(dan.inbox).toEqual([{ type: "admission.pending", you: identity("dan", "pending") }]);
+    const notice = host.inbox.at(-1);
+    expect(notice?.type === "admissions" && notice.requests.map((r) => r.identity.login)).toEqual(["dan"]);
+    // Not a participant yet.
+    const hello = host.inbox[0];
+    expect(hello?.type === "hello" && hello.participants.map((p) => p.login)).toEqual(["alice"]);
+
+    await room.handle(host.conn.id, { type: "admission.decide", userId: "github:dan", decision: "member" });
+    expect(decisions).toEqual(["alice:member:dan"]);
+    expect(dan.inbox[1]).toEqual({ type: "admission.decided", role: "member" });
+    const danHello = dan.inbox[2];
+    expect(danHello?.type === "hello" && danHello.you.role).toBe("member");
+    expect(danHello?.type === "hello" && danHello.participants.map((p) => p.login).sort()).toEqual(["alice", "dan"]);
+
+    // Dan can now prompt, and the host's waiting list is empty.
+    await room.handle(dan.conn.id, { type: "prompt.submit", text: "hi" });
+    expect(dan.inbox.some((m) => m.type === "error")).toBe(false);
+    const cleared = host.inbox.filter((m) => m.type === "admissions").at(-1);
+    expect(cleared?.type === "admissions" && cleared.requests).toEqual([]);
+  });
+
+  it("rejects, and only hosts may decide", async () => {
+    const host = connect(room, identity("alice", "host"));
+    const member = connect(room, identity("bob"));
+    const eve = connect(room, identity("eve", "pending"));
+
+    await room.handle(member.conn.id, { type: "admission.decide", userId: "github:eve", decision: "member" });
+    expect(member.inbox.at(-1)).toEqual({ type: "error", message: "only a host can admit people" });
+
+    await room.handle(host.conn.id, { type: "admission.decide", userId: "github:eve", decision: "reject" });
+    expect(eve.inbox.at(-1)).toEqual({ type: "admission.decided", role: null });
+    expect(decisions).toEqual(["alice:reject:eve"]);
+
+    await room.handle(host.conn.id, { type: "admission.decide", userId: "github:eve", decision: "member" });
+    expect(host.inbox.at(-1)).toEqual({ type: "error", message: "that user is not here any more" });
+  });
+
+  it("re-roles or removes people who are already in", async () => {
+    const host = connect(room, identity("alice", "host"));
+    const viewer = connect(room, identity("vic", "viewer"));
+
+    await room.handle(host.conn.id, { type: "admission.decide", userId: "github:vic", decision: "member" });
+    const hello = viewer.inbox.filter((m) => m.type === "hello").at(-1);
+    expect(hello?.type === "hello" && hello.you.role).toBe("member");
+
+    await room.handle(host.conn.id, { type: "admission.decide", userId: "github:vic", decision: "reject" });
+    expect(viewer.inbox.at(-1)).toEqual({ type: "admission.decided", role: null });
+    const seen = host.inbox.filter((m) => m.type === "participants").at(-1);
+    expect(seen?.type === "participants" && seen.participants.map((p) => p.login)).toEqual(["alice"]);
+
+    // Hosts cannot be decided on.
+    await room.handle(host.conn.id, { type: "admission.decide", userId: "github:alice", decision: "viewer" });
+    expect(host.inbox.at(-1)).toEqual({ type: "error", message: "that user is not here any more" });
+  });
+});
