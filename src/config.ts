@@ -180,7 +180,8 @@ Usage: copilot-room [options]
   --entra-admission POLICY  Entra users outside --entra-group
   --guests POLICY           anonymous guests presenting the join code
   --guest-code CODE         join code for guests (generated when unset)
-  --dev                 Serve the Vite dev client instead of dist/web
+  --dev                 Development mode (client still comes from dist/web:
+                        rerun 'npm run build:web' after changing src/web)
 
 Environment: GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET, ENTRA_TENANT_ID,
 ENTRA_CLIENT_ID, ENTRA_CLIENT_SECRET, COPILOT_GITHUB_TOKEN, COPILOT_ROOM_COOKIE_SECRET,

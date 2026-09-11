@@ -136,12 +136,15 @@ export async function startServer(config: Config, deps: ServerDeps = {}): Promis
     });
   });
 
-  const webDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "web");
-  if (existsSync(webDir)) {
+  // Built: dist/cli.js sits next to dist/web. Run from source via tsx:
+  // src/server/index.ts, so reach the repo-root dist/web instead.
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const webDir = [path.join(moduleDir, "web"), path.resolve(moduleDir, "../../dist/web")].find((d) => existsSync(d));
+  if (webDir) {
     app.use("/*", serveStatic({ root: path.relative(process.cwd(), webDir) }));
     app.get("*", serveStatic({ path: path.relative(process.cwd(), path.join(webDir, "index.html")) }));
   } else {
-    app.get("/", (c) => c.text("client not built; run `npm run build` or use `npm run dev`"));
+    app.get("/", (c) => c.text("client not built; run `npm run build:web`"));
   }
 
   const server = await new Promise<Server>((resolve) => {
