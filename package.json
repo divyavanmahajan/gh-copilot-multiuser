@@ -8,7 +8,7 @@
     "type": "git",
     "url": "git+https://github.com/divyavanmahajan/gh-copilot-multiuser.git"
   },
-  "homepage": "https://github.com/divyavanmahajan/gh-copilot-multiuser#readme",
+  "homepage": "https://divyavanmahajan.github.io/gh-copilot-multiuser",
   "bugs": "https://github.com/divyavanmahajan/gh-copilot-multiuser/issues",
   "engines": {
     "node": ">=22.12.0"
@@ -23,7 +23,8 @@
     "build": "npm run build:server && npm run build:web",
     "build:server": "tsup",
     "build:web": "vite build",
-    "build:site": "tsx scripts/build-site.mts",
+    "build:site": "tsx scripts/build-site.ts",
+    "sync:site-url": "tsx scripts/sync-site-url.ts",
     "dev": "tsx src/cli.ts --repo . --dev",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",

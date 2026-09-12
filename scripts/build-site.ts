@@ -14,28 +14,11 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { PAGES, REPO_URL, SITE_URL, blobUrl, repoRoot, type Page } from "./site-config.js";
 
-const root = path.resolve(import.meta.dirname, "..");
+const root = repoRoot;
 const out = path.join(root, "dist", "site");
 
-interface Page {
-  /** Source file, relative to the repository root. */
-  source: string;
-  /** Published file name. */
-  slug: string;
-  title: string;
-  blurb: string;
-}
-
-const PAGES: Page[] = [
-  { source: "README.md", slug: "index.html", title: "copilot-room", blurb: "One Copilot agent, one repo, your whole team in the room." },
-  { source: "docs/USER-GUIDE.md", slug: "user-guide.html", title: "User guide", blurb: "Using a room: prompts, the queue, approvals, / and @." },
-  { source: "docs/WALKTHROUGH.md", slug: "walkthrough.html", title: "Walkthrough", blurb: "Zero to a team driving one agent, step by step." },
-  { source: "docs/DEPLOY.md", slug: "deploy.html", title: "Deploying", blurb: "Laptop mode, server mode, HTTPS, proxies." },
-  { source: "docs/ENTERPRISE-SETUP.md", slug: "enterprise-setup.html", title: "Enterprise setup", blurb: "GitHub App, Entra, and policy checklist." },
-  { source: "docs/PUBLISHING.md", slug: "publishing.html", title: "Publishing", blurb: "Cutting a release to npm and GHCR." },
-  { source: "docs/DESIGN.md", slug: "design.html", title: "Design", blurb: "Architecture, milestones, and runtime constraints." },
-];
 
 /** Markdown file -> published page, for rewriting links between documents. */
 const BY_SOURCE = new Map(PAGES.map((p) => [p.source, p]));
@@ -68,7 +51,7 @@ async function main(): Promise<void> {
   for (const stale of await readdir(out)) {
     if (!written.has(stale)) await rm(path.join(out, stale), { recursive: true, force: true });
   }
-  console.log(`built ${PAGES.length} pages into ${path.relative(root, out)}`);
+  console.log(`built ${PAGES.length} pages into ${path.relative(root, out)} for ${SITE_URL}`);
 }
 
 /**
@@ -86,7 +69,7 @@ function rewriteLinks(html: string, from: Page): string {
     const page = BY_SOURCE.get(resolved);
     if (page) return `href="${page.slug}${anchor ? `#${anchor}` : ""}"`;
     if (target.endsWith(".md")) {
-      return `href="https://github.com/divyavanmahajan/gh-copilot-multiuser/blob/main/${resolved}"`;
+      return `href="${blobUrl(resolved)}"`;
     }
     return whole;
   });
@@ -134,6 +117,7 @@ function shell(page: Page, body: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escape(page.title === "copilot-room" ? page.title : `${page.title} · copilot-room`)}</title>
 <meta name="description" content="${escape(page.blurb)}">
+<link rel="canonical" href="${SITE_URL}/${page.slug}">
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>💬</text></svg>">
 </head>
@@ -145,7 +129,7 @@ function shell(page: Page, body: string): string {
     <div class="links">
         ${nav}
     </div>
-    <div class="repo"><a href="https://github.com/divyavanmahajan/gh-copilot-multiuser">Source on GitHub</a></div>
+    <div class="repo"><a href="${REPO_URL}">Source on GitHub</a></div>
   </nav>
   <main id="content">
 ${body}
