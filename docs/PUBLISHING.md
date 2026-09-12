@@ -13,11 +13,14 @@ publish from your laptop; you push a tag.
 
 ## One-time setup
 
-1. **npm account and token.** Sign in at npmjs.com, then *Access Tokens* ->
-   *Generate New Token* -> **Automation** (it bypasses 2FA, which interactive
-   tokens cannot do in CI).
-2. **Repository secret.** GitHub repo -> *Settings* -> *Secrets and variables*
-   -> *Actions* -> *New repository secret*, named `NPM_TOKEN`.
+1. **npm account and Trusted Publishing.** Sign in at npmjs.com, then *Access
+   Tokens* -> *Granular Access Tokens* -> *Create new token* -> **Granular access
+   token** (not Automation). Limit to Publishing. Add a Trusted Publisher for this
+   GitHub repository:
+   - Under the token settings, add *Trusted Publishers* -> *GitHub Actions* ->
+     select your GitHub org/user and repository.
+2. **Nothing for secrets.** No `NPM_TOKEN` needed. The workflow uses GitHub OIDC
+   (OpenID Connect) for authentication, which is more secure.
 3. **Nothing for GHCR.** The Docker job authenticates with the workflow's own
    `GITHUB_TOKEN` via the `packages: write` permission already declared in the
    workflow.
@@ -185,8 +188,9 @@ rotate it - removing the version does not remove copies.
 
 | Symptom | Cause |
 |---|---|
-| `ENEEDAUTH` in CI | `NPM_TOKEN` missing, expired, or not an Automation token |
-| `E403` on publish | name taken by someone else, or the token lacks publish rights |
+| `ENEEDAUTH` in CI | Trusted Publisher not configured in npm account |
+| `E403` on publish | name taken by someone else, or Trusted Publisher not set up for this repo |
+| `OIDC token is not valid` | GitHub OIDC not configured; check npm Trusted Publishers settings |
 | `tag v1.2.3 != package.json 1.2.4` | tag made by hand; delete it and use `npm version` |
 | Provenance step fails | the repo must be public, and `package.json` needs a `repository` field |
 | Workflow never ran | the tag was not pushed - `git push origin v1.2.3` |

@@ -2,7 +2,8 @@
 #   1. the npm package `@dvm/copilot-room` (so `npx @dvm/copilot-room` works), and
 #   2. a Docker image on GitHub Container Registry for server mode.
 #
-# Setup once: add an npm automation token as the NPM_TOKEN repository secret.
+# Setup once: Configure npm to trust this GitHub repository via OIDC:
+# https://docs.npmjs.com/creating-and-viewing-access-tokens#creating-granular-access-tokens-on-the-website
 # GHCR needs no secret; it uses the workflow's GITHUB_TOKEN.
 name: Release
 on:
@@ -35,8 +36,6 @@ jobs:
           pkg="$(node -p "require('./package.json').version")"
           [ "$tag" = "$pkg" ] || { echo "tag v$tag != package.json $pkg"; exit 1; }
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   docker:
     runs-on: ubuntu-latest
