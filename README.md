@@ -60,6 +60,8 @@ Published at <https://divyavanmahajan.github.io/gh-copilot-multiuser/>, and in `
   ([md](docs/DEPLOY.md)): laptop mode, server mode, HTTPS, proxies
 - [Enterprise setup](https://divyavanmahajan.github.io/gh-copilot-multiuser/enterprise-setup.html)
   ([md](docs/ENTERPRISE-SETUP.md)): GitHub App and policy checklist
+- [Licensing](https://divyavanmahajan.github.io/gh-copilot-multiuser/licensing.html)
+  ([md](docs/LICENSING.md)): who needs a Copilot seat, and why a room does not change that
 - [Publishing](https://divyavanmahajan.github.io/gh-copilot-multiuser/publishing.html)
   ([md](docs/PUBLISHING.md)): cutting a release to npm and GHCR
 - [Design](https://divyavanmahajan.github.io/gh-copilot-multiuser/design.html)

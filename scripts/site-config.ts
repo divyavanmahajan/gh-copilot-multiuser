@@ -71,6 +71,7 @@ export const PAGES: Page[] = [
   { source: "docs/WALKTHROUGH.md", slug: "walkthrough.html", title: "Walkthrough", blurb: "Zero to a team driving one agent, step by step." },
   { source: "docs/DEPLOY.md", slug: "deploy.html", title: "Deploying", blurb: "Laptop mode, server mode, HTTPS, proxies." },
   { source: "docs/ENTERPRISE-SETUP.md", slug: "enterprise-setup.html", title: "Enterprise setup", blurb: "GitHub App, Entra, and policy checklist." },
+  { source: "docs/LICENSING.md", slug: "licensing.html", title: "Licensing", blurb: "Who needs a Copilot seat, under GitHub and Microsoft agreements." },
   { source: "docs/PUBLISHING.md", slug: "publishing.html", title: "Publishing", blurb: "Cutting a release to npm and GHCR." },
   { source: "docs/DESIGN.md", slug: "design.html", title: "Design", blurb: "Architecture, milestones, and runtime constraints." },
 ];
