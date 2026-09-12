@@ -1,1 +1,98 @@
-# gh-copilot-multiuser
+# copilot-room
+
+One GitHub Copilot agent. One repository. Everyone on the call in the room.
+
+`copilot-room` runs a single Copilot agent session against a repo and lets a
+small team drive it from their browsers: everyone sees the same streamed
+transcript and tool calls, anyone can queue the next prompt, and the agent
+keeps one continuous context. Built on the
+[GitHub Copilot SDK](https://github.com/github/copilot-sdk).
+
+```sh
+cd your-repo
+npx copilot-room --host 0.0.0.0 --org your-org --hosts you
+```
+
+Colleagues open the URL, sign in with GitHub, and start typing.
+
+**Documentation: <https://divyavanmahajan.github.io/gh-copilot-multiuser/>**
+— start with the [user guide](https://divyavanmahajan.github.io/gh-copilot-multiuser/user-guide.html) if you have been invited
+into a room, or the [walkthrough](https://divyavanmahajan.github.io/gh-copilot-multiuser/walkthrough.html) if you are setting
+one up.
+
+## Why
+
+Copilot CLI's own session sharing is view-only and remote control is limited
+to the account that started the session. Terminal sharers (ccshare, Coterm)
+make the terminal multiplayer, not the agent. This project sits on the SDK's
+documented "shared sessions (collaborative)" pattern and adds what a
+terminal cannot: identity, a prompt queue, who-is-driving, routed
+approvals, and an attributed transcript.
+
+## Features (first milestone)
+
+- Strict queue: one prompt in flight, next starts when the agent goes idle
+- Attribution: the agent sees `[alice]: ...` and knows who asked
+- Presence and typing indicators
+- Permission prompts routed to the prompt author (and hosts), with timeout
+- GitHub App sign-in (browser redirect or device code), org/team gate
+- Microsoft Entra ID sign-in (redirect with PKCE, or device code), tenant/group gate
+- Host approval by default for every sign-in type: newcomers wait at the
+  door until a host admits them as viewer or participant from a card in the
+  host's UI; org, team and group members skip the queue
+- Hosts change the admission policy per sign-in type from the UI; the
+  setting persists across restarts
+- Persisted admissions and an allow list, so a server with no host online
+  still lets known people in
+- Guests with a join code, badged as unverified
+- Append-only transcript, replayed to late joiners, doubles as audit log
+- Works on a corporate LAN with no tunnel; Docker image for a shared server
+
+## Docs
+
+Published at <https://divyavanmahajan.github.io/gh-copilot-multiuser/>, and in `docs/` in the repository:
+
+- [User guide](https://divyavanmahajan.github.io/gh-copilot-multiuser/user-guide.html)
+  ([md](docs/USER-GUIDE.md)): using a room - prompts, the queue, approvals, / and @
+- [Walkthrough](https://divyavanmahajan.github.io/gh-copilot-multiuser/walkthrough.html)
+  ([md](docs/WALKTHROUGH.md)): zero to a team driving one agent, step by step
+- [Deploying](https://divyavanmahajan.github.io/gh-copilot-multiuser/deploy.html)
+  ([md](docs/DEPLOY.md)): laptop mode, server mode, HTTPS, proxies
+- [Enterprise setup](https://divyavanmahajan.github.io/gh-copilot-multiuser/enterprise-setup.html)
+  ([md](docs/ENTERPRISE-SETUP.md)): GitHub App and policy checklist
+- [Licensing](https://divyavanmahajan.github.io/gh-copilot-multiuser/licensing.html)
+  ([md](docs/LICENSING.md)): who needs a Copilot seat, and why a room does not change that
+- [Publishing](https://divyavanmahajan.github.io/gh-copilot-multiuser/publishing.html)
+  ([md](docs/PUBLISHING.md)): cutting a release to npm and GHCR
+- [Design](https://divyavanmahajan.github.io/gh-copilot-multiuser/design.html)
+  ([md](docs/DESIGN.md)): architecture, milestones, runtime constraints
+
+## Development
+
+```sh
+npm install
+npm run typecheck && npm test && npm run build
+npm run dev          # room server with tsx; run `npx vite` in another shell for HMR
+```
+
+Requires Node 22+. The Copilot runtime is pulled in by the SDK as a
+platform package; set `COPILOT_CLI_PATH` to use an existing Copilot CLI.
+
+## Status
+
+First milestone implemented. The room, queue, permission routing, auth
+flows, transport and client are covered by unit tests and by end-to-end
+tests over real HTTP and WebSockets against a scripted fake agent. The
+Copilot SDK wrapper compiles against the SDK's published types; the
+remaining step is a run against a live Copilot session on a machine with
+Copilot access, which the walkthrough describes.
+
+## Releasing
+
+Tag a version (`npm version minor && git push --follow-tags`). The Release
+workflow publishes the package to npm and the server image to GitHub
+Container Registry.
+
+## License
+
+MIT
