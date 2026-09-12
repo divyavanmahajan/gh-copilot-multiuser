@@ -15,6 +15,11 @@ npx copilot-room --host 0.0.0.0 --org your-org --hosts you
 
 Colleagues open the URL, sign in with GitHub, and start typing.
 
+**Documentation: <https://divyavanmahajan.github.io/gh-copilot-multiuser/>**
+— start with the [user guide](https://divyavanmahajan.github.io/gh-copilot-multiuser/user-guide.html) if you have been invited
+into a room, or the [walkthrough](https://divyavanmahajan.github.io/gh-copilot-multiuser/walkthrough.html) if you are setting
+one up.
+
 ## Why
 
 Copilot CLI's own session sharing is view-only and remote control is limited
@@ -45,12 +50,20 @@ approvals, and an attributed transcript.
 
 ## Docs
 
-- [docs/USER-GUIDE.md](docs/USER-GUIDE.md): using a room - prompts, the queue, approvals, / and @
-- [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md): zero to a team driving one agent, step by step
-- [docs/DESIGN.md](docs/DESIGN.md): architecture and milestones
-- [docs/DEPLOY.md](docs/DEPLOY.md): laptop mode, server mode, HTTPS, proxies
-- [docs/ENTERPRISE-SETUP.md](docs/ENTERPRISE-SETUP.md): GitHub App and policy checklist
-- [docs/PUBLISHING.md](docs/PUBLISHING.md): cutting a release to npm and GHCR
+Published at <https://divyavanmahajan.github.io/gh-copilot-multiuser/>, and in `docs/` in the repository:
+
+- [User guide](https://divyavanmahajan.github.io/gh-copilot-multiuser/user-guide.html)
+  ([md](docs/USER-GUIDE.md)): using a room - prompts, the queue, approvals, / and @
+- [Walkthrough](https://divyavanmahajan.github.io/gh-copilot-multiuser/walkthrough.html)
+  ([md](docs/WALKTHROUGH.md)): zero to a team driving one agent, step by step
+- [Deploying](https://divyavanmahajan.github.io/gh-copilot-multiuser/deploy.html)
+  ([md](docs/DEPLOY.md)): laptop mode, server mode, HTTPS, proxies
+- [Enterprise setup](https://divyavanmahajan.github.io/gh-copilot-multiuser/enterprise-setup.html)
+  ([md](docs/ENTERPRISE-SETUP.md)): GitHub App and policy checklist
+- [Publishing](https://divyavanmahajan.github.io/gh-copilot-multiuser/publishing.html)
+  ([md](docs/PUBLISHING.md)): cutting a release to npm and GHCR
+- [Design](https://divyavanmahajan.github.io/gh-copilot-multiuser/design.html)
+  ([md](docs/DESIGN.md)): architecture, milestones, runtime constraints
 
 ## Development
 

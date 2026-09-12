@@ -33,6 +33,9 @@ sees or does is not finished until the docs match it, in the same commit.
 - `docs/DESIGN.md` — architecture. Update it when the shape of the system
   changes, not for ordinary features.
 - `README.md` links every doc; add new ones to that list.
+- The docs are published to GitHub Pages (https://divyavanmahajan.github.io/gh-copilot-multiuser/) from `main`
+  by `.github/workflows/pages.yml`. A new document must be added to `PAGES` in
+  `scripts/build-site.mts` or it will not appear on the site.
 
 Two rules that matter more than the file list:
 
