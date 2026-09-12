@@ -23,6 +23,7 @@
     "build": "npm run build:server && npm run build:web",
     "build:server": "tsup",
     "build:web": "vite build",
+    "build:site": "tsx scripts/build-site.mts",
     "dev": "tsx src/cli.ts --repo . --dev",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
