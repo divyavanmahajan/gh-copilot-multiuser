@@ -28,6 +28,9 @@ sees or does is not finished until the docs match it, in the same commit.
   environment variables, sign-in, or the setup steps change. New failure modes
   belong in its troubleshooting table.
 - `docs/DEPLOY.md`, `docs/ENTERPRISE-SETUP.md` — hosting and org policy.
+- `docs/LICENSING.md` — who needs a Copilot seat. Touch it only with care:
+  it summarises contract terms, so it must not drift into claims the terms
+  do not make, and it is not the place for aspirational wording.
 - `docs/PUBLISHING.md` — releases. Update it when the release workflow or the
   contents of the published package change.
 - `docs/DESIGN.md` — architecture. Update it when the shape of the system

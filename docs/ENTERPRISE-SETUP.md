@@ -55,6 +55,17 @@ about individuals are stored in `admissions.json`; review it periodically
 and delete entries to revoke. `--allow` pre-approves named accounts for
 servers with no host online.
 
+## Licensing
+
+Every person whose work the agent performs needs their own Copilot seat. A
+room is a shared view of one session, not a way for one seat to serve several
+people, and neither Copilot Business nor Copilot Enterprise changes that. If
+you buy through a Microsoft agreement rather than from GitHub, the multiplexing
+term in the Microsoft Product Terms says so more explicitly still.
+
+Settle this before a room becomes part of how a team works:
+[LICENSING.md](LICENSING.md).
+
 ## Skills and custom agents
 
 The room reads the repository's own `.github/skills/`, `.github/agents/`,
