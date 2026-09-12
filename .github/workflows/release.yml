@@ -36,6 +36,8 @@ jobs:
           pkg="$(node -p "require('./package.json').version")"
           [ "$tag" = "$pkg" ] || { echo "tag v$tag != package.json $pkg"; exit 1; }
       - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   docker:
     runs-on: ubuntu-latest
