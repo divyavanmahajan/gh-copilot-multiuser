@@ -10,14 +10,16 @@ on:
     paths:
       - "docs/**"
       - "README.md"
-      - "scripts/build-site.mts"
+      - "CLAUDE.md"
+      - "scripts/**"
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # contents: write so the sync step can commit corrected URLs back.
+  contents: write
   pages: write
   id-token: write
 
@@ -37,8 +39,43 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build:site
-      - uses: actions/configure-pages@v5
+
+      # Ask Pages where this repository actually publishes, rather than
+      # trusting a URL somebody typed into the manifest.
+      - id: pages
+        uses: actions/configure-pages@v5
+
+      # Markdown cannot read a constant, so rewrite the literal URLs in the
+      # README and docs to wherever this repository now lives. A fork, a
+      # transfer or a rename corrects its own links instead of advertising the
+      # original repository.
+      - name: Point the docs at this repository
+        env:
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
+        run: npm run sync:site-url
+
+      - name: Commit the corrected URLs
+        env:
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "URLs already correct; nothing to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Point the documentation at ${SITE_URL}"
+          # This push lands on the same paths this workflow watches, so it
+          # triggers one more run. That run finds nothing to change and stops,
+          # so it settles after a single extra pass.
+          git push
+
+      - name: Build the site
+        env:
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
+        run: npm run build:site
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist/site

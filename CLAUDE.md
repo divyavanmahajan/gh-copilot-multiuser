@@ -33,9 +33,13 @@ sees or does is not finished until the docs match it, in the same commit.
 - `docs/DESIGN.md` — architecture. Update it when the shape of the system
   changes, not for ordinary features.
 - `README.md` links every doc; add new ones to that list.
-- The docs are published to GitHub Pages (https://divyavanmahajan.github.io/gh-copilot-multiuser/) from `main`
-  by `.github/workflows/pages.yml`. A new document must be added to `PAGES` in
-  `scripts/build-site.mts` or it will not appear on the site.
+- The docs are published to GitHub Pages from `main` by
+  `.github/workflows/pages.yml`. A new document must be added to `PAGES` in
+  `scripts/site-config.ts` or it will not appear on the site.
+- The project's own URLs live in `scripts/site-config.ts`, derived from
+  `package.json` or from the Actions environment. Do not hand-edit the copies
+  in README.md and docs/: run `npm run sync:site-url`. `test/site.test.ts`
+  fails if they drift.
 
 Two rules that matter more than the file list:
 
