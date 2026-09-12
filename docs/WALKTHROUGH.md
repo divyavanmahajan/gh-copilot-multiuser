@@ -1,5 +1,8 @@
 # Walkthrough: from zero to a team driving one Copilot agent
 
+This is the setup path, for whoever runs the room. People who just want to
+use one should read [USER-GUIDE.md](USER-GUIDE.md).
+
 This is the end-to-end path for a team lead setting the room up for the
 first time, then a colleague joining. Budget about thirty minutes, most of
 it the GitHub App registration.
@@ -18,20 +21,20 @@ Colleagues need a browser and a GitHub account in your org. Nothing to install.
 
 ## 1. Register the GitHub App (once per org)
 
-1. Org settings â†’ Developer settings â†’ GitHub Apps â†’ New GitHub App.
+1. Org settings → Developer settings → GitHub Apps → New GitHub App.
 2. Name it, e.g. `copilot-room`. Homepage URL can be this repo.
 3. Callback URL: `http://<hostname>:3000/auth/github/callback`. Internal
    hostnames are fine; the callback is a browser redirect and GitHub never
    contacts it. Laptop users on device flow do not need it but it does no harm.
 4. Tick **Enable Device Flow**.
 5. Tick **Request user authorization (OAuth) during installation**.
-6. Permissions â†’ Organization permissions â†’ Members: **Read-only**.
+6. Permissions → Organization permissions → Members: **Read-only**.
 7. Create the app. Copy the **Client ID**. Generate a **client secret** and copy it.
 8. Install the app on your org (Install App in the left menu).
 
 ## 2. Check Copilot policies (org admin)
 
-Org settings â†’ Copilot â†’ Policies: Copilot CLI must be enabled. If the SDK
+Org settings → Copilot → Policies: Copilot CLI must be enabled. If the SDK
 is a preview feature for your enterprise, enable preview features.
 
 ## 3a. Laptop mode
@@ -51,7 +54,7 @@ You should see:
 
 ```
 copilot-room listening on http://0.0.0.0:3000 (repo: /Users/you/src/the-repo, mode: laptop)
-[copilot-room] session 2f1câ€¦  ready
+[copilot-room] session 2f1c…  ready
 ```
 
 The runtime signs in with the same credentials as your Copilot CLI. If you
@@ -107,7 +110,7 @@ member, not on the allow list and not previously admitted, a green card
 appears at the top of every host's transcript and the tab title shows a
 count:
 
-> Waiting to join Â· signed in with GitHub Â· 10:42
+> Waiting to join · signed in with GitHub · 10:42
 > **Dana Example** `dana-gh`
 > [Admit as participant] [Admit as viewer] [Reject]
 
@@ -244,7 +247,7 @@ agent would receive it twice, and this workaround should be removed.
   a URL, a card appears for everyone. Only the author of the running prompt
   (and hosts) get the buttons. No answer in two minutes means reject.
 - **Abort.** A host can stop the running turn from the header.
-- **Attribution.** The agent sees `[alice]: â€¦` and `[bob]: â€¦`, so ask it
+- **Attribution.** The agent sees `[alice]: …` and `[bob]: …`, so ask it
   "what did Bob ask for earlier" and it knows.
 - **Late joiners** get the transcript replayed on entry.
 - **Formatting.** The agent's replies are rendered as markdown, so headings,
@@ -252,7 +255,7 @@ agent would receive it twice, and this workaround should be removed.
   prompts and the tool lines stay as literal text, so you can see exactly
   what was asked and exactly what was run.
 - **Skills and agents.** `/` runs one of the repository's skills, `@` sends a
-  prompt to a custom agent. See 4c above.
+  prompt to a custom agent. See 4c above, and USER-GUIDE.md for the detail.
 
 ## 5a. Server mode without a host online
 
@@ -290,13 +293,46 @@ for a members-only room. Guests are badged in the UI and transcript and
 can never be hosts. Think twice before admitting guests as participants
 unless everyone in the room holds a Copilot seat anyway.
 
-## 7. Stopping and resuming
+## 7. Sessions: stopping, resuming, and running more than one
 
-Ctrl-C stops the room. Start it again the same way and pass
-`--session-id <id>` (printed at startup and shown in the header) to pick
-up the same Copilot conversation. The attributed transcript lives in
-`.copilot-room/transcript.jsonl` inside the repo (git-ignored) or in
-`/state` for Docker.
+**A room is one Copilot session.** The server holds a single session for a
+single repository, and there is no way to switch sessions from inside the UI.
+The session id is printed at startup and shown in the header.
+
+Ctrl-C stops the room. Starting it again gives you a **new** Copilot
+conversation unless you say otherwise: pass `--session-id <id>` to resume the
+one you had.
+
+```sh
+npx copilot-room --repo . --session-id 918edc2c-27ea-44ed-8fe4-44ab7446f828
+```
+
+> The attributed transcript and the agent's memory are **not** the same thing.
+> The transcript lives in `.copilot-room/transcript.jsonl` (git-ignored; `/state`
+> under Docker) and belongs to the state directory, so it survives restarts and
+> is replayed to everyone who joins. The agent's memory belongs to the Copilot
+> session. Restart without `--session-id` and the room still shows yesterday's
+> history while the agent remembers none of it. Either resume the session id, or
+> point `--state-dir` somewhere fresh so the two agree.
+
+### Several rooms at once
+
+To run more than one conversation, run more than one room. Each needs its own
+port and its own state directory, and they may point at the same repository or
+different ones:
+
+```sh
+npx copilot-room --repo ~/src/api  --port 3000 --state-dir ~/.rooms/api
+npx copilot-room --repo ~/src/web  --port 3001 --state-dir ~/.rooms/web
+```
+
+Sharing a state directory between two live rooms is not supported: they would
+write the same transcript file and confuse each other's history.
+
+Bear in mind that each room runs its own Copilot runtime against the working
+tree it was given. Two rooms pointed at the *same* checkout will edit the same
+files with no coordination between them, which is rarely what anyone wants —
+give each a separate clone or worktree.
 
 ## 8. Releasing a new version (maintainers)
 
@@ -325,3 +361,9 @@ Registry. Users then get the new version with `npx copilot-room@latest` or
 | Entra group gate rejects members | `groups` claim missing | add the groups claim to the ID token in Token configuration |
 | Cookie not set over HTTP | `--public-url` is https | use an http public URL, or terminate TLS |
 | Corporate proxy errors | proxy not honoured | set `HTTPS_PROXY` and `NODE_EXTRA_CA_CERTS` |
+| "client not built" in the browser | the web client has never been built | `npm run build:web` |
+| `/` and `@` offer nothing | no skill or agent folders, or they were added after startup | check `/skills`; `/refresh` for edits, restart for a new agent |
+| A skill runs as plain text | the name is not one the room knows | `/refresh`, or check spelling against `/skills` |
+| Everyone is asked to sign in after a restart | the cookie secret is generated afresh each start | set `COPILOT_ROOM_COOKIE_SECRET` to keep sessions across restarts |
+| Colleagues see an old UI after an upgrade | their browser cached the previous bundle | they hard reload (`Ctrl+Shift+R`) |
+| Approvals expire before anyone answers | two-minute default is too short for a demo | raise `COPILOT_ROOM_PERMISSION_TIMEOUT` |

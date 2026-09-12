@@ -55,6 +55,25 @@ about individuals are stored in `admissions.json`; review it periodically
 and delete entries to revoke. `--allow` pre-approves named accounts for
 servers with no host online.
 
+## Skills and custom agents
+
+The room reads the repository's own `.github/skills/`, `.github/agents/`,
+`.claude/skills/` and `.claude/agents/` at startup, and offers them to
+everyone in the room behind `/` and `@`.
+
+This is a review surface, not just a convenience. **Anyone who can merge a
+change to those folders changes what the shared agent does for everyone**,
+including the instructions a custom agent runs under. Treat them the way you
+treat CI configuration:
+
+- Put `.github/agents/` and `.github/skills/` behind CODEOWNERS review.
+- Remember an agent definition is a prompt, not a sandbox. A `tools:` list
+  narrows what it may call, but the instruction "never edit files" is
+  guidance to a model, not an enforced boundary. The real boundary is where
+  you run the runtime.
+- `/refresh` re-reads edited definitions without a restart, so a merge can
+  change behaviour mid-session.
+
 ## Room host
 
 - Set `--org my-org` or `--org my-org/team-slug` so only members can join.
@@ -62,7 +81,11 @@ servers with no host online.
   prompt.
 - Run the runtime somewhere you would be comfortable letting a colleague run
   arbitrary shell commands: a container, a VM, or a dedicated worktree.
+- Set `COPILOT_ROOM_COOKIE_SECRET` so a restart does not sign the room out.
 
 ## Users
 
-Nothing to install. A browser and a GitHub account in the org.
+Nothing to install: a browser, and whichever sign-in the room was started
+with - a GitHub account in the org, a Microsoft work account, or the guest
+join code. What they can do once inside is in
+[USER-GUIDE.md](USER-GUIDE.md).

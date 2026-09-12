@@ -45,6 +45,7 @@ approvals, and an attributed transcript.
 
 ## Docs
 
+- [docs/USER-GUIDE.md](docs/USER-GUIDE.md): using a room - prompts, the queue, approvals, / and @
 - [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md): zero to a team driving one agent, step by step
 - [docs/DESIGN.md](docs/DESIGN.md): architecture and milestones
 - [docs/DEPLOY.md](docs/DEPLOY.md): laptop mode, server mode, HTTPS, proxies

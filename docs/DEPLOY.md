@@ -17,6 +17,23 @@ cd ~/src/the-repo
 npx copilot-room --host 0.0.0.0 --org my-org/my-team --hosts alice
 ```
 
+Exporting a secret by hand writes it into your shell history. Every entry
+point - `npx copilot-room`, `npm run dev`, and the Docker image - reads a
+`.env` from the working directory first, so the values can live in a
+gitignored file instead:
+
+```
+GITHUB_APP_CLIENT_ID=...
+GITHUB_APP_CLIENT_SECRET=...
+COPILOT_ROOM_COOKIE_SECRET=...
+```
+
+A variable already set in the environment beats the file, matching node's own
+`--env-file`, so an explicit value on the command line still wins over a stale
+`.env`. `COPILOT_ROOM_ENV_FILE` points somewhere else; set it to an empty
+string to skip the file entirely. Lock the file down (`chmod 600 .env`, or
+`icacls .env /inheritance:r /grant:r "$env:USERNAME:(R,W)"` on Windows).
+
 The runtime uses your own Copilot CLI login. Colleagues open
 `http://<your-hostname>:3000`, sign in with the device code shown, and are
 in. Nothing leaves the network except the room's calls to github.com and
@@ -51,7 +68,13 @@ docker run -d --name room \
 
 `COPILOT_GITHUB_TOKEN` belongs to a service account with a Copilot seat.
 The repo checkout at `/workspace` is what the agent edits; make its git
-credentials whatever you want the agent to commit and push as.
+credentials whatever you want the agent to commit and push as. It is also
+where the room looks for skills and custom agents, so `.github/skills` and
+`.github/agents` must be inside the checkout you mount.
+
+Set `COPILOT_ROOM_COOKIE_SECRET` and keep it stable. It is generated afresh
+on every start when unset, which invalidates every browser session: the whole
+room is asked to sign in again after a restart.
 
 Register `http://devbox.corp.local:3000/auth/github/callback` as the
 GitHub App's callback URL. Internal hostnames are fine.
@@ -97,6 +120,18 @@ go in `NODE_EXTRA_CA_CERTS`.
 ## State
 
 `--state-dir` (default `<repo>/.copilot-room`, git-ignored) holds the
-transcript. The Copilot runtime keeps its own session state under
-`~/.copilot/session-state/<sessionId>`; pass `--session-id` to resume a
-specific one after a restart.
+attributed transcript (`transcript.jsonl`), the host-editable admission
+policy (`settings.json`) and the per-person decisions (`admissions.json`).
+The Copilot runtime keeps its own session state under
+`~/.copilot/session-state/<sessionId>`.
+
+The transcript and the agent's memory are separate. The transcript belongs
+to the state directory and outlives any session; the memory belongs to the
+Copilot session, and a restart starts a new one unless you pass
+`--session-id`. Restart without it and the room replays history the agent no
+longer has. Resume the id, or give the room a fresh `--state-dir`, so the two
+agree.
+
+A room is one session. To run two conversations, run two rooms, each with
+its own `--port` and `--state-dir`; prefer separate checkouts, since two
+rooms on one working tree will edit the same files with no coordination.
