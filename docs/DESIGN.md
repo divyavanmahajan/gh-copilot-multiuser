@@ -46,7 +46,19 @@ be serialized by the application. See
   WebSockets. Owns the single `CopilotClient` and single `CopilotSession`.
 - **Agent wrapper** (`src/server/agent/copilot.ts`). The only file that
   imports the SDK. Creates or resumes the session pinned to the repo,
-  forwards an allow-listed subset of session events, reports idle.
+  registers the discovered skills and custom agents on it, forwards an
+  allow-listed subset of session events, and reports idle. A prompt aimed at
+  a custom agent is dispatched as a subagent task rather than run on the
+  room's own session, so one person's choice cannot change what the next
+  person's turn runs on.
+- **Catalog** (`src/server/agent/catalog.ts`). Scans the repository for the
+  skills and custom agents it ships and hands them to the session. The
+  runtime discovers none of this by itself (`enableConfigDiscovery` defaults
+  to false), and scanning here means the room knows what exists before the
+  agent is asked, which is what the `/` and `@` pickers are built from. Both
+  the `.github/` and `.claude/` layouts are read; `.github` wins a name
+  collision. Imports no SDK types: it returns plain data that the agent
+  wrapper maps onto the SDK's shapes.
 - **Strict queue** (`src/server/agent/queue.ts`). Pure state machine. One
   prompt in flight; the next starts on `session.idle`. Authors may withdraw
   their own pending prompt; hosts may withdraw anyone's.
@@ -79,7 +91,11 @@ be serialized by the application. See
 - **Protocol** (`src/protocol/messages.ts`). Zod schemas shared by server
   and browser; both sides validate every frame.
 - **Web client** (`src/web`). Vite + React. Transcript with streaming
-  deltas and tool cards, prompt box, queue panel, presence, approval cards.
+  deltas, markdown-rendered replies and tool cards, prompt box with the `/`
+  and `@` pickers, queue panel, presence, approval cards. `/skills`,
+  `/agents` and `/refresh` are answered in the browser from the catalog it
+  already holds, so a listing stays private to the reader instead of
+  entering the shared transcript.
 
 ### Identity and roles
 
@@ -160,6 +176,43 @@ so run it in a container or a dedicated worktree, and gate who can join.
 - Plain HTTP on a LAN is supported; the session cookie is marked `Secure`
   only when `--public-url` is HTTPS.
 
+## Runtime behaviour we had to work around
+
+These are properties of the bundled Copilot runtime, not of this codebase.
+They are written down because each one cost an afternoon to find, and each
+workaround looks removable to someone who does not know why it is there.
+
+**The runtime does not apply a custom agent's authored prompt.** An agent
+discovered from disk fails outright:
+
+```
+Standalone server does not support session effect 'custom_agent_prompt'
+```
+
+An agent supplied through `customAgents` is accepted, appears in
+`agent.list()`, and is dispatched under its own name — but answers as the
+default agent. `agent.select()` is worse: it reports success and
+`agent.getCurrent()` confirms the selection, while the selected agent's
+prompt has no effect on the next turn at all. Because the catalog has
+already parsed the prompt out of the `.md`, the agent wrapper sends it as
+part of the subagent's task text. **If a future runtime applies the prompt
+itself, the agent will receive it twice and this must be removed.**
+
+**A subagent turn produces no `session.idle`.** The host session goes quiet
+while the background task works, so the wrapper ends the turn on
+`subagent.completed` instead. Aborting clears the same flag, or the room
+would never return to idle.
+
+**Tool names are platform-specific.** The shell tool is `powershell` on
+Windows and `bash` on Linux, so a `tools:` list in an agent definition
+silently strips the agent of a shell on the other platform. Names observed
+from this runtime: `glob`, `powershell`, `read_agent`, `rg`, `skill`,
+`task`, `view`.
+
+**Skills only run while the session is idle.** `commands.list` reports
+`allowDuringAgentExecution: false` for them, which is why the room expands a
+`/command` in `pump()` rather than at submit time.
+
 ## Milestones
 
 **M1 (this skeleton, to be completed):** one room, one repo, GitHub App and
@@ -172,10 +225,14 @@ alternately; both see identical streamed output; the second prompt waits
 for the first turn.
 
 **M2 (partly done):** Microsoft Entra ID sign-in and host-approved public
-sign-in are in. Remaining: optional Copilot seat verification with an admin
-token, voting on destructive actions, per-kind auto-approval rules.
+sign-in are in, as are markdown-rendered replies and the repository's own
+skills and custom agents behind `/` and `@`. Remaining: optional Copilot
+seat verification with an admin token, voting on destructive actions,
+per-kind auto-approval rules.
 
-**M3:** multiple rooms per server, Slack/Teams bridge, mid-turn steering.
+**M3:** multiple rooms per server and switching between sessions from the
+UI (today a room is one session; a second conversation means a second room
+on another port), Slack/Teams bridge, mid-turn steering.
 
 ## Non-goals
 
