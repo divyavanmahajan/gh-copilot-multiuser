@@ -90,6 +90,12 @@ be serialized by the application. See
   the first start only.
 - **Protocol** (`src/protocol/messages.ts`). Zod schemas shared by server
   and browser; both sides validate every frame.
+- **Documentation site** (`scripts/build-site.mts`). Renders `docs/` and the
+  README into the static site published to GitHub Pages at
+  <https://divyavanmahajan.github.io/gh-copilot-multiuser/>. It reuses the web client's markdown pipeline rather than
+  introducing a second one, so the site and the transcript render identically.
+  Deployment follows `main` through `.github/workflows/pages.yml`,
+  independently of the version-tagged npm and container release.
 - **Web client** (`src/web`). Vite + React. Transcript with streaming
   deltas, markdown-rendered replies and tool cards, prompt box with the `/`
   and `@` pickers, queue panel, presence, approval cards. `/skills`,

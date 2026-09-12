@@ -88,6 +88,48 @@ Two traps worth knowing:
   ship a stale or missing `dist/`. It costs an extra rebuild in CI, which is
   cheap insurance against publishing nothing but a `package.json`.
 
+## The documentation site
+
+The docs are also published to GitHub Pages at <https://divyavanmahajan.github.io/gh-copilot-multiuser/>. It is a separate
+pipeline from the release above: the site follows `main`, not version tags, so
+a documentation fix is live minutes after it merges without cutting a release.
+
+`.github/workflows/pages.yml` runs on a push to `main` that touches `docs/`,
+`README.md`, `scripts/build-site.mts`, or the manifest, and can also be started
+by hand with *Run workflow*. It runs `npm run build:site` and deploys the
+result.
+
+**Setup once:** *Settings* -> *Pages* -> *Source: GitHub Actions*. Until that
+is set the build goes green and the deploy step fails with "Pages site not
+found".
+
+### How the site is built
+
+`scripts/build-site.mts` renders each markdown file to HTML and wraps it in a
+shared shell with the navigation. It uses the same react-markdown pipeline the
+room itself uses to render the agent's replies, so a page on the site and a
+message in the transcript are formatted identically and there is no second
+markdown dependency to keep in step.
+
+Build it locally exactly as CI does:
+
+```sh
+npm run build:site      # writes dist/site
+```
+
+Then open `dist/site/index.html` in a browser. The output is plain files with
+relative links, so `file://` works; no server is needed.
+
+Two details worth knowing before changing it:
+
+- **Adding a document means adding it to `PAGES`** in the build script, and to
+  the list in `README.md`. A markdown link to a file that is not in `PAGES`
+  is rewritten to point at GitHub rather than 404ing on the site.
+- **Heading ids follow GitHub's slugger**, including that runs of spaces are
+  not collapsed, so a table of contents written for GitHub keeps working once
+  published. `.nojekyll` is written into the output so Pages serves what the
+  build produced instead of running Jekyll over it.
+
 ## Publishing by hand
 
 Only if the workflow is broken. You lose provenance, because npm can only
