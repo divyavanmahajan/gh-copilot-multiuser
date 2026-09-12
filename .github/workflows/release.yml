@@ -35,9 +35,8 @@ jobs:
           tag="${GITHUB_REF_NAME#v}"
           pkg="$(node -p "require('./package.json').version")"
           [ "$tag" = "$pkg" ] || { echo "tag v$tag != package.json $pkg"; exit 1; }
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # Package is built and ready to publish manually
+      # Run locally: npm login && npm publish --provenance --access public
 
   docker:
     runs-on: ubuntu-latest
