@@ -10,5 +10,5 @@ export default defineConfig({
   sourcemap: true,
   banner: { js: "#!/usr/bin/env node" },
   // The SDK spawns a native runtime; never bundle it.
-  external: ["@github/copilot-sdk"],
+  external: ["@github/copilot-sdk", "@anthropic-ai/claude-agent-sdk"],
 });

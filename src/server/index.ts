@@ -20,6 +20,7 @@ import type { AuthProvider } from "./auth/provider.js";
 import { COOKIE_NAME, SessionStore } from "./auth/session-store.js";
 import type { AgentFactory } from "./agent/agent.js";
 import { copilotAgentFactory } from "./agent/copilot.js";
+import { claudeAgentFactory } from "./agent/claude.js";
 import { Room } from "./room/room.js";
 import { SettingsStore } from "./settings.js";
 import { attachWebSocket } from "./ws.js";
@@ -107,12 +108,20 @@ export async function startServer(config: Config, deps: ServerDeps = {}): Promis
     },
     agentFactory:
       deps.agentFactory ??
-      copilotAgentFactory({
-        repo: config.repo,
-        model: config.model,
-        sessionId: config.sessionId,
-        gitHubToken: config.copilotToken,
-      }),
+      (config.agent === "claude"
+        ? claudeAgentFactory({
+            repo: config.repo,
+            model: config.model,
+            sessionId: config.sessionId,
+            apiKey: config.anthropicApiKey,
+            maxBudgetUsd: config.maxBudgetUsd,
+          })
+        : copilotAgentFactory({
+            repo: config.repo,
+            model: config.model,
+            sessionId: config.sessionId,
+            gitHubToken: config.copilotToken,
+          })),
     log,
   });
   await room.start();
@@ -132,6 +141,7 @@ export async function startServer(config: Config, deps: ServerDeps = {}): Promis
       // Only sign-in methods that can currently succeed are offered.
       providers: providers.map((p) => p.name).filter((n) => n !== "guest" || admission.guest !== "off"),
       admission,
+      agent: config.agent,
       sessionId: room.sessionId,
     });
   });

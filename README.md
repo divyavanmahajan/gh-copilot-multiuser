@@ -43,6 +43,14 @@ approvals, and an attributed transcript.
 - Append-only transcript, replayed to late joiners, doubles as audit log
 - Works on a corporate LAN with no tunnel; Docker image for a shared server
 
+## Agent backends
+
+GitHub Copilot is the default. An experimental Claude Agent SDK backend is
+being explored on this branch: `--agent claude` with `ANTHROPIC_API_KEY`
+set and `@anthropic-ai/claude-agent-sdk` installed. Findings, the mapping
+onto the room, and what remains are in
+[docs/CLAUDE-AGENT-SDK.md](docs/CLAUDE-AGENT-SDK.md).
+
 ## Docs
 
 - [docs/WALKTHROUGH.md](docs/WALKTHROUGH.md): zero to a team driving one agent, step by step

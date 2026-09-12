@@ -213,6 +213,20 @@ up the same Copilot conversation. The attributed transcript lives in
 `.copilot-room/transcript.jsonl` inside the repo (git-ignored) or in
 `/state` for Docker.
 
+## 7a. Experimental: drive Claude instead of Copilot
+
+```sh
+npm install @anthropic-ai/claude-agent-sdk   # about 230 MB, bundles the runtime
+export ANTHROPIC_API_KEY=sk-ant-...
+npx copilot-room --agent claude --max-budget-usd 20 --host 0.0.0.0 --org my-org
+```
+
+Everything in the room works the same: queue, approvals, admissions,
+transcript. Differences: the runtime bills the API key, not a seat; Claude's
+clarifying questions are declined with a note asking it to ask in prose;
+and the backend has not yet been exercised against a live session. See
+docs/CLAUDE-AGENT-SDK.md.
+
 ## 8. Releasing a new version (maintainers)
 
 ```sh

@@ -9,9 +9,12 @@ import path from "node:path";
 import { parseAllowList, type AdmissionPolicy, type AllowEntry } from "./server/auth/admissions.js";
 
 export type Mode = "laptop" | "server";
+export type AgentBackend = "copilot" | "claude";
 
 export interface Config {
   mode: Mode;
+  /** Which agent runtime drives the room. Claude is experimental; see docs/CLAUDE-AGENT-SDK.md. */
+  agent: AgentBackend;
   repo: string;
   host: string;
   port: number;
@@ -58,6 +61,10 @@ export interface Config {
   };
   /** Token the Copilot runtime authenticates with. Unset means the host's CLI login. */
   copilotToken?: string;
+  /** Anthropic API key for the Claude backend. Unset means the process environment decides. */
+  anthropicApiKey?: string;
+  /** Hard per-session spend cap for the Claude backend, in USD. */
+  maxBudgetUsd?: number;
   /** Secret used to sign browser session cookies. Generated when unset. */
   cookieSecret?: string;
   dev: boolean;
@@ -68,6 +75,7 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env): Con
     args: argv,
     options: {
       mode: { type: "string" },
+      agent: { type: "string" },
       repo: { type: "string" },
       host: { type: "string" },
       port: { type: "string" },
@@ -84,6 +92,7 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env): Con
       "entra-group": { type: "string" },
       "entra-admission": { type: "string" },
       allow: { type: "string" },
+      "max-budget-usd": { type: "string" },
       dev: { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
@@ -96,6 +105,8 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env): Con
   }
 
   const mode = (values.mode ?? env.COPILOT_ROOM_MODE ?? "laptop") as Mode;
+  const agent = (values.agent ?? env.COPILOT_ROOM_AGENT ?? "copilot") as AgentBackend;
+  if (agent !== "copilot" && agent !== "claude") throw new Error("--agent must be copilot or claude");
   const repo = path.resolve(values.repo ?? env.COPILOT_ROOM_REPO ?? process.cwd());
   const host = values.host ?? env.COPILOT_ROOM_HOST ?? (mode === "server" ? "0.0.0.0" : "127.0.0.1");
   const port = Number(values.port ?? env.PORT ?? 3000);
@@ -108,6 +119,7 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env): Con
 
   return {
     mode,
+    agent,
     repo,
     host,
     port,
@@ -139,6 +151,8 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env): Con
     allow: parseAllowList(values.allow ?? env.COPILOT_ROOM_ALLOW),
     guests: { policy: guests, code: values["guest-code"] ?? env.COPILOT_ROOM_GUEST_CODE },
     copilotToken: env.COPILOT_GITHUB_TOKEN ?? env.GH_TOKEN,
+    anthropicApiKey: env.ANTHROPIC_API_KEY,
+    maxBudgetUsd: values["max-budget-usd"] ?? env.COPILOT_ROOM_MAX_BUDGET_USD ? Number(values["max-budget-usd"] ?? env.COPILOT_ROOM_MAX_BUDGET_USD) : undefined,
     cookieSecret: env.COPILOT_ROOM_COOKIE_SECRET,
     dev: Boolean(values.dev),
   };
@@ -160,6 +174,10 @@ function printHelp(): void {
 Usage: copilot-room [options]
 
   --repo DIR            Repository the agent works in (default: cwd)
+  --agent copilot|claude
+                        Agent runtime (default: copilot; claude is experimental and
+                        needs @anthropic-ai/claude-agent-sdk installed)
+  --max-budget-usd N    Claude backend only: hard per-session spend cap
   --mode laptop|server  laptop binds localhost, server binds all interfaces (default: laptop)
   --host ADDR           Bind address (overrides mode default)
   --port N              Port (default: 3000)
@@ -183,6 +201,7 @@ Usage: copilot-room [options]
   --dev                 Serve the Vite dev client instead of dist/web
 
 Environment: GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET, ENTRA_TENANT_ID,
-ENTRA_CLIENT_ID, ENTRA_CLIENT_SECRET, COPILOT_GITHUB_TOKEN, COPILOT_ROOM_COOKIE_SECRET,
-COPILOT_ROOM_PERMISSION_TIMEOUT, COPILOT_ROOM_ALLOW, HTTPS_PROXY.`);
+ENTRA_CLIENT_ID, ENTRA_CLIENT_SECRET, COPILOT_GITHUB_TOKEN, ANTHROPIC_API_KEY,
+COPILOT_ROOM_AGENT, COPILOT_ROOM_COOKIE_SECRET, COPILOT_ROOM_PERMISSION_TIMEOUT,
+COPILOT_ROOM_ALLOW, HTTPS_PROXY.`);
 }
