@@ -122,13 +122,42 @@ relative links, so `file://` works; no server is needed.
 
 Two details worth knowing before changing it:
 
-- **Adding a document means adding it to `PAGES`** in the build script, and to
-  the list in `README.md`. A markdown link to a file that is not in `PAGES`
-  is rewritten to point at GitHub rather than 404ing on the site.
+- **Adding a document means adding it to `PAGES`** in `scripts/site-config.ts`,
+  and to the list in `README.md`. A markdown link to a file that is not in
+  `PAGES` is rewritten to point at GitHub rather than 404ing on the site.
 - **Heading ids follow GitHub's slugger**, including that runs of spaces are
   not collapsed, so a table of contents written for GitHub keeps working once
   published. `.nojekyll` is written into the output so Pages serves what the
   build produced instead of running Jekyll over it.
+
+### Where the URLs come from
+
+The project's own address is one fact, in `scripts/site-config.ts`. It resolves
+in this order:
+
+1. `SITE_URL` and `REPO_URL` from the environment. The Pages workflow sets
+   them from `actions/configure-pages`, so a build always describes where it is
+   actually being published.
+2. `GITHUB_REPOSITORY`, which every Actions run sets, giving the conventional
+   `https://<owner>.github.io/<name>`.
+3. `package.json` - `homepage` and `repository` - for a local build.
+
+Markdown cannot read a constant, so README.md and the documents carry literal
+URLs. `npm run sync:site-url` rewrites them from whatever the above resolves
+to, and the Pages workflow runs it on every push: **a fork, a transfer or a
+rename corrects its own links and commits the result**, rather than advertising
+the repository it came from. That commit touches paths this workflow watches,
+so it triggers one further run, which finds nothing to change and stops.
+
+Locally:
+
+```sh
+npm run sync:site-url              # rewrite to match package.json
+npm run sync:site-url -- --check   # fail if anything disagrees
+```
+
+`test/site.test.ts` makes the same assertion, so a drifted URL fails the test
+suite rather than waiting to be noticed by a reader.
 
 ## Publishing by hand
 
