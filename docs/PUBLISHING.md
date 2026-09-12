@@ -2,7 +2,7 @@
 
 A release publishes two artifacts from one git tag:
 
-1. the npm package **`copilot-room`**, which is what makes `npx copilot-room`
+1. the npm package **`@dvm/copilot-room`**, which is what makes `npx @dvm/copilot-room`
    work, and
 2. a Docker image at **`ghcr.io/divyavanmahajan/gh-copilot-multiuser`** for
    server mode.
@@ -21,12 +21,10 @@ publish from your laptop; you push a tag.
 3. **Nothing for GHCR.** The Docker job authenticates with the workflow's own
    `GITHUB_TOKEN` via the `packages: write` permission already declared in the
    workflow.
-4. **Check the name is free.** `npm view copilot-room version` returning a 404
-   means the name is still available. If someone takes it first, change `name`
-   in `package.json` to a scoped one (`@yourorg/copilot-room`) - scoped packages
-   also need `--access public`, which the workflow already passes.
+4. **The package is now scoped as `@dvm/copilot-room`.** Scoped packages
+   automatically require the `--access public` flag, which the workflow already passes.
 
-The npm package name (`copilot-room`) deliberately differs from the repository
+The npm package name (`@dvm/copilot-room`) deliberately differs from the repository
 name (`gh-copilot-multiuser`); only the repository name appears in the image
 tag.
 
@@ -57,7 +55,7 @@ mislabelled package.
 ## Verifying
 
 ```sh
-npx copilot-room@1.2.3 --help
+npx @dvm/copilot-room@1.2.3 --help
 docker pull ghcr.io/divyavanmahajan/gh-copilot-multiuser:1.2.3
 ```
 
@@ -177,7 +175,7 @@ already installed the version; the version number is then burned forever.
 Publish a fixed patch version and mark the bad one:
 
 ```sh
-npm deprecate copilot-room@1.2.3 "Broken release, use 1.2.4"
+npm deprecate @dvm/copilot-room@1.2.3 "Broken release, use 1.2.4"
 ```
 
 If a secret leaks into a published tarball, treat the secret as compromised and

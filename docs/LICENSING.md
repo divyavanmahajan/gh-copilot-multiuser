@@ -11,7 +11,7 @@ organisation before relying on any of this.
 
 ## Why this project has to say something
 
-`copilot-room` runs **one** Copilot session and lets a team drive it. The
+`@dvm/copilot-room` runs **one** Copilot session and lets a team drive it. The
 runtime authenticates as a single account — the host's CLI login, or a
 `COPILOT_GITHUB_TOKEN`. Everyone else prompts through the browser.
 

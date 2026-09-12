@@ -22,7 +22,7 @@ Colleagues need a browser and a GitHub account in your org. Nothing to install.
 ## 1. Register the GitHub App (once per org)
 
 1. Org settings → Developer settings → GitHub Apps → New GitHub App.
-2. Name it, e.g. `copilot-room`. Homepage URL can be this repo.
+2. Name it, e.g. `@dvm/copilot-room`. Homepage URL can be this repo.
 3. Callback URL: `http://<hostname>:3000/auth/github/callback`. Internal
    hostnames are fine; the callback is a browser redirect and GitHub never
    contacts it. Laptop users on device flow do not need it but it does no harm.
@@ -47,14 +47,14 @@ export GITHUB_APP_CLIENT_SECRET=xxxxxxxxxxxxxxxx
 
 # every session
 cd ~/src/the-repo
-npx copilot-room --host 0.0.0.0 --org my-org/platform-team --hosts $USER
+npx @dvm/copilot-room --host 0.0.0.0 --org my-org/platform-team --hosts $USER
 ```
 
 You should see:
 
 ```
-copilot-room listening on http://0.0.0.0:3000 (repo: /Users/you/src/the-repo, mode: laptop)
-[copilot-room] session 2f1c…  ready
+@dvm/copilot-room listening on http://0.0.0.0:3000 (repo: /Users/you/src/the-repo, mode: laptop)
+[@dvm/copilot-room] session 2f1c…  ready
 ```
 
 The runtime signs in with the same credentials as your Copilot CLI. If you
@@ -77,7 +77,7 @@ docker run -d --name copilot-room -p 3000:3000 \
   -e COPILOT_ROOM_ORG=my-org/platform-team \
   -e COPILOT_ROOM_HOSTS=alice,bob \
   -e COPILOT_ROOM_COOKIE_SECRET=$(openssl rand -hex 32) \
-  ghcr.io/divyavanmahajan/gh-copilot-multiuser:latest
+  ghcr.io/divyavanmahajan/gh-copilot-multiuser:1.0.0
 docker logs -f copilot-room
 ```
 
@@ -145,7 +145,7 @@ Set three environment variables and the Microsoft button appears:
 export ENTRA_TENANT_ID=00000000-0000-0000-0000-000000000000
 export ENTRA_CLIENT_ID=11111111-1111-1111-1111-111111111111
 export ENTRA_CLIENT_SECRET=...        # omit if the app allows public client flows only
-npx copilot-room --host 0.0.0.0 --entra-group <group-object-id> --hosts alice@corp.com
+npx @dvm/copilot-room --host 0.0.0.0 --entra-group <group-object-id> --hosts alice@corp.com
 ```
 
 Everyone in the tenant may sign in. With `--entra-group`, members of that
@@ -170,14 +170,14 @@ ENTRA_CLIENT_ID=11111111-1111-1111-1111-111111111111
 ENTRA_CLIENT_SECRET=...
 ```
 
-Every entry point reads it - `npm run dev`, `npx copilot-room`, and the
+Every entry point reads it - `npm run dev`, `npx @dvm/copilot-room`, and the
 Docker image - because the CLI loads it before the config is parsed. The
 file is optional; nothing breaks without one. Restrict it to your own
 account (`chmod 600 .env`, or
 `icacls .env /inheritance:r /grant:r "$env:USERNAME:(R,W)"` on Windows).
 
 Precedence matches node's own `--env-file`: a variable already set in the
-environment beats the file, so `ENTRA_CLIENT_SECRET=... npx copilot-room`
+environment beats the file, so `ENTRA_CLIENT_SECRET=... npx @dvm/copilot-room`
 still wins over a stale `.env`. The file is read from the current working
 directory; set `COPILOT_ROOM_ENV_FILE` to point somewhere else, or to an
 empty string to skip it. In production prefer your process manager or
@@ -200,7 +200,7 @@ carries `name`, `description` and optionally `tools` and `model`, and whose body
 is the agent's prompt. The startup log says what was found:
 
 ```
-[copilot-room] catalog: 34 skill(s), 2 custom agent(s)
+[@dvm/copilot-room] catalog: 34 skill(s), 2 custom agent(s)
 ```
 
 An agent's `tools:` list is optional, and usually best left out. Tool names
@@ -285,7 +285,7 @@ code is printed at startup and shown in the hosts' Admission panel; pin it
 with `--guest-code`:
 
 ```sh
-npx copilot-room --host 0.0.0.0 --org my-org --guest-code kiwi-42
+npx @dvm/copilot-room --host 0.0.0.0 --org my-org --guest-code kiwi-42
 ```
 
 Switch guests to *Refuse* in the Admission panel (or seed `--guests off`)
@@ -304,7 +304,7 @@ conversation unless you say otherwise: pass `--session-id <id>` to resume the
 one you had.
 
 ```sh
-npx copilot-room --repo . --session-id 918edc2c-27ea-44ed-8fe4-44ab7446f828
+npx @dvm/copilot-room --repo . --session-id 918edc2c-27ea-44ed-8fe4-44ab7446f828
 ```
 
 > The attributed transcript and the agent's memory are **not** the same thing.
@@ -322,8 +322,8 @@ port and its own state directory, and they may point at the same repository or
 different ones:
 
 ```sh
-npx copilot-room --repo ~/src/api  --port 3000 --state-dir ~/.rooms/api
-npx copilot-room --repo ~/src/web  --port 3001 --state-dir ~/.rooms/web
+npx @dvm/copilot-room --repo ~/src/api  --port 3000 --state-dir ~/.rooms/api
+npx @dvm/copilot-room --repo ~/src/web  --port 3001 --state-dir ~/.rooms/web
 ```
 
 Sharing a state directory between two live rooms is not supported: they would
@@ -341,9 +341,9 @@ npm version minor          # bumps package.json and creates the git tag
 git push --follow-tags
 ```
 
-The Release workflow publishes `copilot-room` to npm (needs the `NPM_TOKEN`
+The Release workflow publishes `@dvm/copilot-room` to npm (needs the `NPM_TOKEN`
 repository secret) and pushes the Docker image to GitHub Container
-Registry. Users then get the new version with `npx copilot-room@latest` or
+Registry. Users then get the new version with `npx @dvm/copilot-room@latest` or
 `docker pull ghcr.io/divyavanmahajan/gh-copilot-multiuser:latest`.
 
 ## Troubleshooting

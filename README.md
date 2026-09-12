@@ -1,8 +1,8 @@
-# copilot-room
+# @dvm/copilot-room
 
 One GitHub Copilot agent. One repository. Everyone on the call in the room.
 
-`copilot-room` runs a single Copilot agent session against a repo and lets a
+`@dvm/copilot-room` runs a single Copilot agent session against a repo and lets a
 small team drive it from their browsers: everyone sees the same streamed
 transcript and tool calls, anyone can queue the next prompt, and the agent
 keeps one continuous context. Built on the
@@ -10,7 +10,7 @@ keeps one continuous context. Built on the
 
 ```sh
 cd your-repo
-npx copilot-room --host 0.0.0.0 --org your-org --hosts you
+npx @dvm/copilot-room --host 0.0.0.0 --org your-org --hosts you
 ```
 
 Colleagues open the URL, sign in with GitHub, and start typing.
