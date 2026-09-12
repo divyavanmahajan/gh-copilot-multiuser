@@ -14,11 +14,11 @@
 export GITHUB_APP_CLIENT_ID=...
 export GITHUB_APP_CLIENT_SECRET=...
 cd ~/src/the-repo
-npx copilot-room --host 0.0.0.0 --org my-org/my-team --hosts alice
+npx @dvm/gh-copilot-multiuser --host 0.0.0.0 --org my-org/my-team --hosts alice
 ```
 
 Exporting a secret by hand writes it into your shell history. Every entry
-point - `npx copilot-room`, `npm run dev`, and the Docker image - reads a
+point - `npx @dvm/gh-copilot-multiuser`, `npm run dev`, and the Docker image - reads a
 `.env` from the working directory first, so the values can live in a
 gitignored file instead:
 

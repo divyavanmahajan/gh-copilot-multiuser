@@ -2,8 +2,8 @@
 
 A release publishes two artifacts from one git tag:
 
-1. the npm package **`copilot-room`**, which is what makes `npx copilot-room`
-   work, and
+1. the npm package **`@dvm/gh-copilot-multiuser`**, which is what makes
+   `npx @dvm/gh-copilot-multiuser` work, and
 2. a Docker image at **`ghcr.io/divyavanmahajan/gh-copilot-multiuser`** for
    server mode.
 
@@ -13,22 +13,65 @@ publish from your laptop; you push a tag.
 
 ## One-time setup
 
-1. **npm account and token.** Sign in at npmjs.com, then *Access Tokens* ->
-   *Generate New Token* -> **Automation** (it bypasses 2FA, which interactive
-   tokens cannot do in CI).
-2. **Repository secret.** GitHub repo -> *Settings* -> *Secrets and variables*
-   -> *Actions* -> *New repository secret*, named `NPM_TOKEN`.
-3. **Nothing for GHCR.** The Docker job authenticates with the workflow's own
-   `GITHUB_TOKEN` via the `packages: write` permission already declared in the
-   workflow.
-4. **Check the name is free.** `npm view copilot-room version` returning a 404
-   means the name is still available. If someone takes it first, change `name`
-   in `package.json` to a scoped one (`@yourorg/copilot-room`) - scoped packages
-   also need `--access public`, which the workflow already passes.
+There is no npm secret to configure. The npm job authenticates with the OIDC
+token GitHub mints for that run, and npm decides whether to trust it from a rule
+you add on npmjs.com - **trusted publishing**. The credential lives for the
+length of one publish, so there is nothing in repository settings to leak,
+rotate, or discover expired at the worst moment.
 
-The npm package name (`copilot-room`) deliberately differs from the repository
-name (`gh-copilot-multiuser`); only the repository name appears in the image
-tag.
+1. **Create the package by hand, once.** npm can only attach a trusted publisher
+   to a package that already exists, and there is no pending-publisher flow, so
+   the first version goes up from a laptop:
+
+   ```sh
+   npm login              # the account that owns the @dvm scope
+   rm -rf dist
+   npm publish            # prepublishOnly builds first
+   ```
+
+   A scope is an npm username or organisation, so `@dvm/gh-copilot-multiuser`
+   requires the npm account `dvm`. Scoped packages are private unless told
+   otherwise; `package.json` carries `"publishConfig": { "access": "public" }`
+   so a hand publish cannot get this wrong, and the workflow passes
+   `--access public` as well.
+
+2. **Add the trusted publisher.** npmjs.com -> *Packages* ->
+   **@dvm/gh-copilot-multiuser** -> *Settings* -> *Trusted publishing* -> *GitHub
+   Actions*:
+
+   | Field | Value |
+   |---|---|
+   | Organization or user | `divyavanmahajan` |
+   | Repository | `gh-copilot-multiuser` |
+   | Workflow filename | `release.yml` |
+   | Environment | leave empty |
+
+   The workflow filename is matched literally, and only the workflow named here
+   may publish. Renaming or moving `.github/workflows/release.yml` stops
+   releases until the rule is updated to match.
+
+3. **Then remove the token.** An automation token that can still publish this
+   package undoes the point of the exercise. Delete it at npmjs.com ->
+   *Access Tokens*, and delete the `NPM_TOKEN` repository secret if one was ever
+   added. The package's *Settings* -> *Publishing access* can also require
+   trusted publishing and disallow tokens outright, which makes that removal
+   enforced rather than remembered.
+
+4. **Nothing for GHCR.** The Docker job authenticates with the workflow's own
+   `GITHUB_TOKEN` via the `packages: write` permission declared on that job.
+
+Two things the npm job depends on, both worth knowing before editing it:
+
+- **`id-token: write`** on the job. Without it there is no OIDC token to
+  exchange and the publish fails as unauthenticated.
+- **npm 11.5.1 or newer**, which is why the job asks for Node 24. It asserts the
+  version before publishing rather than letting an old npm fail confusingly at
+  the end.
+
+The npm package mirrors the repository name under the `@dvm` scope, but the
+command it installs is still `copilot-room`. That mismatch is harmless: a package
+shipping exactly one `bin` runs it whatever the package is called, so
+`npx @dvm/gh-copilot-multiuser` starts a room.
 
 ## Cutting a release
 
@@ -57,13 +100,15 @@ mislabelled package.
 ## Verifying
 
 ```sh
-npx copilot-room@1.2.3 --help
+npx @dvm/gh-copilot-multiuser@1.2.3 --help
 docker pull ghcr.io/divyavanmahajan/gh-copilot-multiuser:1.2.3
 ```
 
 The image is also tagged `1.2` and `latest`. On npm, check the *Provenance*
-badge on the package page: the workflow publishes with `--provenance`, which
-attests the package was built from this repository at that commit.
+badge on the package page: publishing over OIDC attaches provenance
+automatically - attesting the package was built from this repository at that
+commit - so the workflow does not pass `--provenance`, and should not be
+"fixed" to.
 
 ## What ends up in the package
 
@@ -161,8 +206,9 @@ suite rather than waiting to be noticed by a reader.
 
 ## Publishing by hand
 
-Only if the workflow is broken. You lose provenance, because npm can only
-attest to a build it ran:
+Only if the workflow is broken, and only if the package's publishing access
+still permits tokens - see step 3 above. You lose provenance, because npm can
+only attest to a build it ran:
 
 ```sh
 npm login
@@ -177,7 +223,7 @@ already installed the version; the version number is then burned forever.
 Publish a fixed patch version and mark the bad one:
 
 ```sh
-npm deprecate copilot-room@1.2.3 "Broken release, use 1.2.4"
+npm deprecate @dvm/gh-copilot-multiuser@1.2.3 "Broken release, use 1.2.4"
 ```
 
 If a secret leaks into a published tarball, treat the secret as compromised and
@@ -187,8 +233,12 @@ rotate it - removing the version does not remove copies.
 
 | Symptom | Cause |
 |---|---|
-| `ENEEDAUTH` in CI | `NPM_TOKEN` missing, expired, or not an Automation token |
-| `E403` on publish | name taken by someone else, or the token lacks publish rights |
+| `ENEEDAUTH` or `E404` on publish, `actions/setup-node` older than v7 | with `registry-url` set, those versions write `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` into `.npmrc` even when nothing sets that variable. npm reads the empty line as "already authenticated" and never attempts the OIDC exchange. v7 removed the placeholder; on an older version, strip the line after `setup-node` runs with `sed -i '/_authToken/d' "${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"` |
+| `ENEEDAUTH` on setup-node v7 | no trusted publisher matches this run - check the workflow filename on npmjs.com, and that `id-token: write` is on the job |
+| `npm 10.x is older than 11.5.1` | the job's Node version was lowered; trusted publishing needs npm 11.5.1+ |
+| `E404` on the very first publish | trusted publishing cannot create a package - publish the first version by hand (setup step 1) |
+| `E403` on publish | the signed-in account does not own the `@dvm` scope, or the name is taken |
+| Package published private | both `--access public` and `publishConfig.access` were removed; a scoped package defaults to private |
 | `tag v1.2.3 != package.json 1.2.4` | tag made by hand; delete it and use `npm version` |
-| Provenance step fails | the repo must be public, and `package.json` needs a `repository` field |
+| Provenance badge missing | the repo must be public, and `package.json` needs a `repository` field |
 | Workflow never ran | the tag was not pushed - `git push origin v1.2.3` |
