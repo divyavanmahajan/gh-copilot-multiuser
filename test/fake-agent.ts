@@ -2,14 +2,22 @@
  * Scripted stand-in for the Copilot runtime. Each prompt produces a short
  * streamed reply; a prompt containing "run" first asks for shell permission.
  */
-import type { Agent, AgentCallbacks, AgentFactory } from "../src/server/agent/agent.js";
-import type { AgentEvent } from "../src/protocol/messages.js";
+import type { Agent, AgentCallbacks, AgentFactory, CommandOutcome } from "../src/server/agent/agent.js";
+import type { AgentEvent, Catalog } from "../src/protocol/messages.js";
 
 export class FakeAgent implements Agent {
   readonly sessionId = "fake-session";
   readonly prompts: string[] = [];
   readonly log: AgentEvent[] = [];
+  /** Agent name each prompt was routed to, parallel to `prompts`. */
+  readonly routedTo: Array<string | undefined> = [];
+  readonly commandsRun: Array<{ name: string; args: string }> = [];
   aborted = 0;
+  reloads = 0;
+  catalogValue: Catalog = {
+    skills: [{ name: "release-notes", description: "Draft release notes.", kind: "skill" }],
+    agents: [{ name: "reviewer", description: "Reviews a diff." }],
+  };
   private turn: Promise<void> = Promise.resolve();
 
   constructor(private readonly cb: AgentCallbacks) {}
@@ -18,11 +26,30 @@ export class FakeAgent implements Agent {
     queueMicrotask(() => this.cb.onIdle()); // runtime reports idle after start
   }
 
-  async send(authorLogin: string, text: string): Promise<string> {
+  async send(authorLogin: string, text: string, agentName?: string): Promise<string> {
     const prompt = `[${authorLogin}]: ${text}`;
     this.prompts.push(prompt);
+    this.routedTo.push(agentName);
     this.turn = this.runTurn(prompt, text);
     return `msg-${this.prompts.length}`;
+  }
+
+  async catalog(): Promise<Catalog> {
+    return this.catalogValue;
+  }
+
+  async refreshCatalog(): Promise<Catalog> {
+    this.reloads++;
+    return this.catalogValue;
+  }
+
+  async runCommand(name: string, args: string): Promise<CommandOutcome> {
+    this.commandsRun.push({ name, args });
+    // "echo" stands for a command that answers by itself; anything else
+    // expands into prompt text the way a skill does.
+    if (name === "echo") return { kind: "text", text: `echo: ${args}` };
+    if (name === "nothing") return { kind: "none" };
+    return { kind: "prompt", text: `<${name}> ${args}`.trim(), display: `/${name} ${args}`.trim() };
   }
 
   private async runTurn(prompt: string, text: string): Promise<void> {

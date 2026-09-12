@@ -16,13 +16,19 @@ export function Queue({
     <div>
       {current && (
         <div className="queue-item">
-          <span className="text"><strong>{current.authorLogin}</strong>: {current.text}</span>
+          <span className="text">
+            <strong>{current.authorLogin}</strong>
+            {current.agent && <span className="badge">@{current.agent}</span>}: {current.text}
+          </span>
           <span className="badge">running</span>
         </div>
       )}
       {queue.map((p, i) => (
         <div key={p.id} className="queue-item">
-          <span className="text">{i + 1}. <strong>{p.authorLogin}</strong>: {p.text}</span>
+          <span className="text">
+            {i + 1}. <strong>{p.authorLogin}</strong>
+            {p.agent && <span className="badge">@{p.agent}</span>}: {p.text}
+          </span>
           {(p.authorId === me.id || can(me.role, "withdrawOthers")) && (
             <button className="secondary" onClick={() => onWithdraw(p.id)}>✕</button>
           )}

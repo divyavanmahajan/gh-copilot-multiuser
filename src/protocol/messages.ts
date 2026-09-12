@@ -38,6 +38,8 @@ export const QueuedPrompt = z.object({
   authorLogin: z.string(),
   text: z.string(),
   submittedAt: z.string(),
+  /** Custom agent this prompt runs on, when the author picked one with @. */
+  agent: z.string().optional(),
 });
 export type QueuedPrompt = z.infer<typeof QueuedPrompt>;
 
@@ -99,6 +101,33 @@ export type AgentEvent = z.infer<typeof AgentEvent>;
 // Server -> client
 // ---------------------------------------------------------------------------
 
+/** A skill the agent can run, offered to people as /name. */
+export const SkillSummary = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+  /** "skill" comes from a SKILL.md; "builtin"/"client" come from the runtime. */
+  kind: z.string(),
+  /** What the skill expects after the command name, when it says. */
+  inputHint: z.string().optional(),
+});
+export type SkillSummary = z.infer<typeof SkillSummary>;
+
+/** A custom agent a prompt can be routed to, offered to people as @name. */
+export const AgentSummary = z.object({
+  name: z.string(),
+  displayName: z.string().optional(),
+  description: z.string().optional(),
+  tools: z.array(z.string()).optional(),
+});
+export type AgentSummary = z.infer<typeof AgentSummary>;
+
+/** Everything the composer needs to offer / and @ completions. */
+export const Catalog = z.object({
+  skills: z.array(SkillSummary),
+  agents: z.array(AgentSummary),
+});
+export type Catalog = z.infer<typeof Catalog>;
+
 export const TranscriptEntry = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("agent"), at: z.string(), event: AgentEvent }),
   z.object({ kind: z.literal("turn.started"), at: z.string(), prompt: QueuedPrompt }),
@@ -134,7 +163,10 @@ export const ServerMessage = z.discriminatedUnion("type", [
     /** Hosts only: current settings and the guest join code. */
     settings: RoomSettings.nullable(),
     guestCode: z.string().nullable(),
+    /** Skills and custom agents this room found, for / and @ completion. */
+    catalog: Catalog,
   }),
+  z.object({ type: z.literal("catalog"), catalog: Catalog }),
   z.object({ type: z.literal("participants"), participants: z.array(Participant) }),
   /** Sent to a user who is signed in but not admitted yet. */
   z.object({ type: z.literal("admission.pending"), you: Identity }),
@@ -165,7 +197,14 @@ export type ServerMessage = z.infer<typeof ServerMessage>;
 // ---------------------------------------------------------------------------
 
 export const ClientMessage = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("prompt.submit"), text: z.string().min(1).max(20_000) }),
+  z.object({
+    type: z.literal("prompt.submit"),
+    text: z.string().min(1).max(20_000),
+    /** Custom agent to run this one prompt, from the @ picker. */
+    agent: z.string().max(200).optional(),
+  }),
+  /** Re-scan the repository for skills and agents. */
+  z.object({ type: z.literal("catalog.refresh") }),
   z.object({ type: z.literal("prompt.withdraw"), promptId: z.string() }),
   z.object({ type: z.literal("typing"), typing: z.boolean() }),
   z.object({ type: z.literal("permission.respond"), requestId: z.string(), decision: PermissionDecision }),
@@ -176,6 +215,26 @@ export const ClientMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("settings.update"), patch: RoomSettingsPatch }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
+
+/**
+ * A leading `/name`, if the text invokes a command. Server and client must
+ * agree on this, or the composer would offer completions for something the
+ * room parses differently.
+ */
+export function parseCommand(text: string): { name: string; args: string } | null {
+  const match = /^\/([A-Za-z0-9][\w.-]*)\s*([\s\S]*)$/.exec(text.trim());
+  return match?.[1] ? { name: match[1], args: (match[2] ?? "").trim() } : null;
+}
+
+/**
+ * Split a leading `@name` off the prompt. The mention is routing, not content,
+ * so it is removed from the text the agent is given.
+ */
+export function splitAgentMention(text: string): { agent?: string; text: string } {
+  const match = /^@([A-Za-z0-9][\w.-]*)\s+([\s\S]+)$/.exec(text.trim());
+  if (!match?.[1] || !match[2]) return { text };
+  return { agent: match[1], text: match[2].trim() };
+}
 
 /** Rights derived from a role. Kept here so server and client agree. */
 export function can(role: Role, action: "prompt" | "approve" | "abort" | "withdrawOthers" | "admit" | "settings"): boolean {
