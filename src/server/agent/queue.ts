@@ -26,13 +26,14 @@ export class PromptQueue {
   }
 
   /** Append a prompt. Returns the queued record (with id and timestamp). */
-  submit(input: { authorId: string; authorLogin: string; text: string }): QueuedPrompt {
+  submit(input: { authorId: string; authorLogin: string; text: string; agent?: string }): QueuedPrompt {
     const prompt: QueuedPrompt = {
       id: randomUUID(),
       authorId: input.authorId,
       authorLogin: input.authorLogin,
       text: input.text,
       submittedAt: new Date().toISOString(),
+      ...(input.agent ? { agent: input.agent } : {}),
     };
     this.pending.push(prompt);
     return prompt;

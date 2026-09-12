@@ -4,14 +4,18 @@
  * Everything user-facing flows through here. Transport (WebSocket) is kept
  * in ws.ts so this class can be driven from tests without sockets.
  */
+import { randomUUID } from "node:crypto";
+
 import type { Agent, AgentFactory } from "../agent/agent.js";
 import { PermissionRouter } from "../agent/permissions.js";
 import { PromptQueue } from "../agent/queue.js";
 import { Transcript } from "./transcript.js";
 import {
   can,
+  parseCommand,
   type AdmissionDecision,
   type AdmissionRequest,
+  type Catalog,
   type ClientMessage,
   type Identity,
   type Participant,
@@ -51,6 +55,7 @@ export interface Connection {
 
 export class Room {
   private readonly connections = new Map<string, Connection & { typing: boolean; connectedAt: string }>();
+  private catalog: Catalog = { skills: [], agents: [] };
   /** Signed in, waiting for a host. Not participants yet; they see nothing. */
   private readonly waiting = new Map<string, Connection & { requestedAt: string }>();
   private readonly queue = new PromptQueue();
@@ -87,8 +92,12 @@ export class Room {
   async start(): Promise<void> {
     await this.transcript.load();
     await this.agent.start();
+    this.catalog = await this.agent.catalog();
     this.setStatus("idle");
     this.opts.log(`session ${this.agent.sessionId} ready`);
+    this.opts.log(
+      `catalog: ${this.catalog.skills.length} skill(s), ${this.catalog.agents.length} custom agent(s)`,
+    );
   }
 
   async stop(): Promise<void> {
@@ -142,6 +151,7 @@ export class Room {
       pendingAdmissions: conn.identity.role === "host" ? this.pendingAdmissions() : [],
       settings: conn.identity.role === "host" ? (this.opts.settings?.get() ?? null) : null,
       guestCode: conn.identity.role === "host" ? (this.opts.guestCode ?? null) : null,
+      catalog: this.catalog,
     });
   }
 
@@ -215,9 +225,25 @@ export class Room {
 
       case "prompt.submit": {
         if (!can(identity.role, "prompt")) return conn.send({ type: "error", message: "viewers cannot submit prompts" });
-        this.queue.submit({ authorId: identity.id, authorLogin: identity.login, text: msg.text });
+        // Reject an unknown @agent here rather than at run time, so the author
+        // finds out while they are still looking at what they typed.
+        if (msg.agent && !this.catalog.agents.some((a) => a.name === msg.agent)) {
+          return conn.send({ type: "error", message: `no custom agent called ${msg.agent}` });
+        }
+        this.queue.submit({
+          authorId: identity.id,
+          authorLogin: identity.login,
+          text: msg.text,
+          ...(msg.agent ? { agent: msg.agent } : {}),
+        });
         this.broadcastQueue();
         await this.pump();
+        return;
+      }
+
+      case "catalog.refresh": {
+        this.catalog = await this.agent.refreshCatalog();
+        this.broadcast({ type: "catalog", catalog: this.catalog });
         return;
       }
 
@@ -276,7 +302,28 @@ export class Room {
     this.broadcastQueue();
     this.record({ kind: "turn.started", at: now(), prompt: next });
     try {
-      await this.agent.send(next.authorLogin, next.text);
+      // A leading /name is a skill or runtime command. Only a name the runtime
+      // actually offers counts, so a prompt that merely opens with a path is
+      // still a prompt. Expanding it here rather than at submit time means it
+      // runs while the session is idle, the only moment the runtime accepts one.
+      const command = parseCommand(next.text);
+      if (command && this.catalog.skills.some((s) => s.name === command.name)) {
+        const outcome = await this.agent.runCommand(command.name, command.args);
+        if (outcome.kind === "prompt") {
+          await this.agent.send(next.authorLogin, outcome.text, next.agent);
+          return;
+        }
+        if (outcome.kind === "text") {
+          this.record({
+            kind: "agent",
+            at: now(),
+            event: { type: "assistant.message", id: randomUUID(), timestamp: now(), data: { content: outcome.text } },
+          });
+        }
+        this.onTurnFinished("completed");
+        return;
+      }
+      await this.agent.send(next.authorLogin, next.text, next.agent);
     } catch (err) {
       this.opts.log(`send failed: ${String(err)}`);
       this.onTurnFinished("error", String(err));
