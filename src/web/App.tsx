@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   can,
+  splitAgentMention,
   type AdmissionRequest,
   type Identity,
   type Participant,
   type QueuedPrompt,
   type RoomSettings,
   type RoomStatus,
+  type Catalog,
   type ServerMessage,
   type TranscriptEntry,
 } from "../protocol/messages.js";
@@ -18,6 +20,13 @@ import { Presence } from "./components/Presence.js";
 import { ApprovalCard, type PendingApproval } from "./components/ApprovalCard.js";
 import { AdmissionCard } from "./components/AdmissionCard.js";
 import { SettingsPanel } from "./components/SettingsPanel.js";
+import {
+  CatalogList,
+  CommandPicker,
+  itemsFor,
+  localCommand,
+  pickerFor,
+} from "./components/CommandPicker.js";
 
 interface RoomInfo {
   name: string;
@@ -57,6 +66,9 @@ function RoomView() {
   const [gate, setGate] = useState<"open" | "waiting" | "rejected">("open");
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [catalog, setCatalog] = useState<Catalog>({ skills: [], agents: [] });
+  const [listing, setListing] = useState<"skills" | "agents" | null>(null);
+  const [highlight, setHighlight] = useState(0);
   const typingTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -74,6 +86,10 @@ function RoomView() {
           setAdmissions(msg.pendingAdmissions);
           setSettings(msg.settings);
           setGuestCode(msg.guestCode);
+          setCatalog(msg.catalog);
+          break;
+        case "catalog":
+          setCatalog(msg.catalog);
           break;
         case "settings":
           setSettings(msg.settings);
@@ -127,7 +143,21 @@ function RoomView() {
   const submit = () => {
     const text = draft.trim();
     if (!text) return;
-    socket.send({ type: "prompt.submit", text });
+
+    // /skills, /agents and /refresh are the room's own, not the agent's: a
+    // listing is for the person who asked, so it never enters the transcript.
+    const local = localCommand(text);
+    if (local) {
+      if (local === "refresh") socket.send({ type: "catalog.refresh" });
+      else setListing(local);
+      setDraft("");
+      return;
+    }
+
+    // A leading @name is routing, so it travels beside the prompt rather than
+    // inside it; the server checks the name before anything is queued.
+    const { agent, text: body } = splitAgentMention(text);
+    socket.send({ type: "prompt.submit", text: body, ...(agent ? { agent } : {}) });
     socket.send({ type: "typing", typing: false });
     setDraft("");
   };
@@ -165,6 +195,18 @@ function RoomView() {
   if (!me || !room) return <div className="login">Joining room…</div>;
   const canPrompt = can(me.role, "prompt");
 
+  // Recomputed each render: the draft is the only source of truth for whether
+  // a picker is open, so there is no second piece of state to fall out of sync.
+  const picker = canPrompt ? pickerFor(draft) : null;
+  const pickerItems = picker ? itemsFor(picker, catalog) : [];
+
+  const complete = (name: string) => {
+    // /skills and friends are whole commands; everything else takes arguments.
+    const isLocal = picker?.kind === "/" && localCommand(`/${name}`);
+    setDraft(`${picker?.kind ?? ""}${name}${isLocal ? "" : " "}`);
+    setHighlight(0);
+  };
+
   return (
     <div className="layout">
       <header>
@@ -193,6 +235,7 @@ function RoomView() {
             onDecide={(decision) => socket.send({ type: "admission.decide", userId: a.identity.id, decision })}
           />
         ))}
+        {listing && <CatalogList kind={listing} catalog={catalog} onClose={() => setListing(null)} />}
         <Transcript entries={transcript} />
         {approvals.map((a) => (
           <ApprovalCard
@@ -232,13 +275,44 @@ function RoomView() {
       </aside>
 
       <footer>
+        {picker && (
+          <CommandPicker
+            state={picker}
+            items={pickerItems}
+            highlight={Math.min(highlight, Math.max(pickerItems.length - 1, 0))}
+            onPick={complete}
+          />
+        )}
         <textarea
           rows={2}
-          placeholder={canPrompt ? "Ask the agent… (Enter to send, Shift+Enter for newline)" : "Viewers can watch but not prompt"}
+          placeholder={
+            canPrompt
+              ? "Ask the agent… / for a skill, @ for an agent (Enter to send, Shift+Enter for newline)"
+              : "Viewers can watch but not prompt"
+          }
           disabled={!canPrompt}
           value={draft}
           onChange={(e) => onDraftChange(e.target.value)}
           onKeyDown={(e) => {
+            // While the picker is open the arrow keys and Enter belong to it.
+            if (picker && pickerItems.length) {
+              if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault();
+                const step = e.key === "ArrowDown" ? 1 : -1;
+                setHighlight((h) => (h + step + pickerItems.length) % pickerItems.length);
+                return;
+              }
+              if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+                e.preventDefault();
+                const chosen = pickerItems[Math.min(highlight, pickerItems.length - 1)];
+                if (chosen) complete(chosen.name);
+                return;
+              }
+            }
+            if (e.key === "Escape") {
+              setDraft("");
+              return;
+            }
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               submit();

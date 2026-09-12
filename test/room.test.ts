@@ -139,6 +139,79 @@ describe("Room", () => {
       entries(alice.inbox).map((e) => e.kind),
     );
   });
+
+  describe("skills and custom agents", () => {
+    it("offers the catalog to everyone who joins", () => {
+      const alice = connect(room, identity("alice"));
+      const hello = alice.inbox[0];
+      expect(hello?.type === "hello" && hello.catalog.skills.map((s) => s.name)).toEqual(["release-notes"]);
+      expect(hello?.type === "hello" && hello.catalog.agents.map((a) => a.name)).toEqual(["reviewer"]);
+    });
+
+    it("expands a known slash command and runs what it returns", async () => {
+      const alice = connect(room, identity("alice"));
+      await room.handle(alice.conn.id, { type: "prompt.submit", text: "/release-notes since v1.0" });
+      await waitFor(() => factory.instance().prompts.length > 0);
+
+      expect(factory.instance().commandsRun).toEqual([{ name: "release-notes", args: "since v1.0" }]);
+      // What reaches the agent is the expansion, not the command the user typed.
+      expect(factory.instance().prompts[0]).toBe("[alice]: <release-notes> since v1.0");
+    });
+
+    it("sends an unknown slash command through as an ordinary prompt", async () => {
+      const alice = connect(room, identity("alice"));
+      await room.handle(alice.conn.id, { type: "prompt.submit", text: "/usr/bin/env matters here" });
+      await waitFor(() => factory.instance().prompts.length > 0);
+
+      expect(factory.instance().commandsRun).toEqual([]);
+      expect(factory.instance().prompts[0]).toBe("[alice]: /usr/bin/env matters here");
+    });
+
+    it("posts the output of a command that answers for itself, without an agent turn", async () => {
+      const alice = connect(room, identity("alice"));
+      factory.instance().catalogValue = {
+        skills: [{ name: "echo", kind: "builtin" }],
+        agents: [],
+      };
+      await room.handle(alice.conn.id, { type: "catalog.refresh" });
+      await room.handle(alice.conn.id, { type: "prompt.submit", text: "/echo hello" });
+      await waitFor(() => room.currentStatus === "idle" && entries(alice.inbox).some((e) => e.kind === "turn.finished"));
+
+      expect(factory.instance().prompts).toEqual([]);
+      const message = entries(alice.inbox).find((e) => e.kind === "agent" && e.event.type === "assistant.message");
+      expect(message && (message as { event: { data: { content: string } } }).event.data.content).toBe("echo: hello");
+    });
+
+    it("routes a prompt to the named custom agent for that turn only", async () => {
+      const alice = connect(room, identity("alice"));
+      await room.handle(alice.conn.id, { type: "prompt.submit", text: "look at the diff", agent: "reviewer" });
+      await waitFor(() => factory.instance().prompts.length > 0);
+      expect(factory.instance().routedTo).toEqual(["reviewer"]);
+
+      await waitFor(() => room.currentStatus === "idle");
+      await room.handle(alice.conn.id, { type: "prompt.submit", text: "and now this" });
+      await waitFor(() => factory.instance().prompts.length > 1);
+      // The next prompt is not stuck on someone else's agent.
+      expect(factory.instance().routedTo).toEqual(["reviewer", undefined]);
+    });
+
+    it("refuses an agent nobody has defined", async () => {
+      const alice = connect(room, identity("alice"));
+      await room.handle(alice.conn.id, { type: "prompt.submit", text: "hello", agent: "nope" });
+      expect(alice.inbox.at(-1)).toEqual({ type: "error", message: "no custom agent called nope" });
+      expect(factory.instance().prompts).toEqual([]);
+    });
+
+    it("re-scans on request and tells everyone the new catalog", async () => {
+      const alice = connect(room, identity("alice"));
+      factory.instance().catalogValue = { skills: [], agents: [{ name: "scribe" }] };
+      await room.handle(alice.conn.id, { type: "catalog.refresh" });
+
+      expect(factory.instance().reloads).toBe(1);
+      const update = alice.inbox.at(-1);
+      expect(update?.type === "catalog" && update.catalog.agents.map((a) => a.name)).toEqual(["scribe"]);
+    });
+  });
 });
 
 describe("Room admissions", () => {
@@ -270,4 +343,5 @@ describe("Room settings", () => {
 
     await room.stop();
   });
+
 });

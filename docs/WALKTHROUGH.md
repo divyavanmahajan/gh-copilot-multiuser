@@ -18,20 +18,20 @@ Colleagues need a browser and a GitHub account in your org. Nothing to install.
 
 ## 1. Register the GitHub App (once per org)
 
-1. Org settings → Developer settings → GitHub Apps → New GitHub App.
+1. Org settings â†’ Developer settings â†’ GitHub Apps â†’ New GitHub App.
 2. Name it, e.g. `copilot-room`. Homepage URL can be this repo.
 3. Callback URL: `http://<hostname>:3000/auth/github/callback`. Internal
    hostnames are fine; the callback is a browser redirect and GitHub never
    contacts it. Laptop users on device flow do not need it but it does no harm.
 4. Tick **Enable Device Flow**.
 5. Tick **Request user authorization (OAuth) during installation**.
-6. Permissions → Organization permissions → Members: **Read-only**.
+6. Permissions â†’ Organization permissions â†’ Members: **Read-only**.
 7. Create the app. Copy the **Client ID**. Generate a **client secret** and copy it.
 8. Install the app on your org (Install App in the left menu).
 
 ## 2. Check Copilot policies (org admin)
 
-Org settings → Copilot → Policies: Copilot CLI must be enabled. If the SDK
+Org settings â†’ Copilot â†’ Policies: Copilot CLI must be enabled. If the SDK
 is a preview feature for your enterprise, enable preview features.
 
 ## 3a. Laptop mode
@@ -51,7 +51,7 @@ You should see:
 
 ```
 copilot-room listening on http://0.0.0.0:3000 (repo: /Users/you/src/the-repo, mode: laptop)
-[copilot-room] session 2f1c…  ready
+[copilot-room] session 2f1câ€¦  ready
 ```
 
 The runtime signs in with the same credentials as your Copilot CLI. If you
@@ -107,7 +107,7 @@ member, not on the allow list and not previously admitted, a green card
 appears at the top of every host's transcript and the tab title shows a
 count:
 
-> Waiting to join · signed in with GitHub · 10:42
+> Waiting to join Â· signed in with GitHub Â· 10:42
 > **Dana Example** `dana-gh`
 > [Admit as participant] [Admit as viewer] [Reject]
 
@@ -180,6 +180,59 @@ directory; set `COPILOT_ROOM_ENV_FILE` to point somewhere else, or to an
 empty string to skip it. In production prefer your process manager or
 container runtime - see DEPLOY.md.
 
+## 4c. Skills and custom agents
+
+The room scans the repository when it starts and hands what it finds to the
+runtime. Nothing is configured; the folders are enough:
+
+```
+.github/skills/<name>/SKILL.md     .claude/skills/<name>/SKILL.md
+.github/agents/<name>.md           .claude/agents/<name>.md
+```
+
+Both ecosystems' layouts are read, because a repository worked on by more than
+one assistant usually has both. When a name appears in each, the `.github` copy
+wins. A skill is its `SKILL.md`; an agent is a markdown file whose front matter
+carries `name`, `description` and optionally `tools` and `model`, and whose body
+is the agent's prompt. The startup log says what was found:
+
+```
+[copilot-room] catalog: 34 skill(s), 2 custom agent(s)
+```
+
+An agent's `tools:` list is optional, and usually best left out. Tool names
+differ by platform - the shell is `powershell` on Windows and `bash` on
+Linux - so a fixed list silently leaves the agent without a shell on the
+other one. Omit it and the agent gets everything; let the prompt say what it
+should not do.
+
+**`/` runs a skill.** Type `/` in the composer and pick from the list, or type
+the name. The runtime expands the skill into a prompt, and that prompt runs as
+an ordinary turn: queued, attributed to you, visible to everyone. The list also
+carries the runtime's own commands, marked `builtin`.
+
+**`@` sends one prompt to a custom agent.** Type `@` and pick. The prompt runs
+as a subagent, so it does not change what anyone else's turn runs on - there is
+no mode to leave switched on by mistake. The transcript shows `you → @reviewer`,
+then the agent starting and finishing.
+
+**`/skills` and `/agents` list what is available**, and `/refresh` re-scans
+after you add or edit a file. These three are answered by your own browser, so
+the listing is yours alone and never enters the shared transcript.
+
+A `/` that is not a command the room knows is sent as an ordinary prompt, so
+opening a message with a path does not turn it into something else.
+
+### A caveat about custom agent prompts
+
+The bundled runtime cannot apply an agent's authored prompt itself: a
+runtime-discovered agent fails with *"Standalone server does not support session
+effect 'custom_agent_prompt'"*, and an agent supplied through the SDK is
+accepted but answers as the default agent. The room works around this by
+sending the prompt it parsed out of the `.md` as part of the subagent's task, so
+the agent behaves as written. If a future runtime applies the prompt itself, the
+agent would receive it twice, and this workaround should be removed.
+
 ## 5. Driving the agent together
 
 - **Send** a prompt when the status reads *idle*. It runs immediately and
@@ -191,13 +244,15 @@ container runtime - see DEPLOY.md.
   a URL, a card appears for everyone. Only the author of the running prompt
   (and hosts) get the buttons. No answer in two minutes means reject.
 - **Abort.** A host can stop the running turn from the header.
-- **Attribution.** The agent sees `[alice]: …` and `[bob]: …`, so ask it
+- **Attribution.** The agent sees `[alice]: â€¦` and `[bob]: â€¦`, so ask it
   "what did Bob ask for earlier" and it knows.
 - **Late joiners** get the transcript replayed on entry.
 - **Formatting.** The agent's replies are rendered as markdown, so headings,
   lists, tables, links and fenced code blocks come out formatted. Your own
   prompts and the tool lines stay as literal text, so you can see exactly
   what was asked and exactly what was run.
+- **Skills and agents.** `/` runs one of the repository's skills, `@` sends a
+  prompt to a custom agent. See 4c above.
 
 ## 5a. Server mode without a host online
 

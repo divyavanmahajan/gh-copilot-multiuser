@@ -54,7 +54,12 @@ function coalesce(entries: TranscriptEntry[]): Block[] {
     i++;
     if (e.kind === "turn.started") {
       streaming = null;
-      out.push({ key: `t${i}`, cls: "user", who: e.prompt.authorLogin, text: e.prompt.text });
+      out.push({
+        key: `t${i}`,
+        cls: "user",
+        who: e.prompt.agent ? `${e.prompt.authorLogin} → @${e.prompt.agent}` : e.prompt.authorLogin,
+        text: e.prompt.text,
+      });
       continue;
     }
     if (e.kind === "turn.finished") {
@@ -95,6 +100,25 @@ function coalesce(entries: TranscriptEntry[]): Block[] {
       case "tool.execution_complete": {
         const name = toolNames.get(String(d.toolCallId ?? "")) ?? "tool";
         out.push({ key: `tc${i}`, cls: "tool", text: `${d.success === false ? "✗" : "✓"} ${name}${d.success === false ? " (failed)" : ""}` });
+        break;
+      }
+      case "subagent.started": {
+        streaming = null;
+        out.push({
+          key: `sa${i}`,
+          cls: "tool",
+          text: `▶ @${String(d.agentName ?? "agent")}${d.agentDescription ? ` · ${String(d.agentDescription)}` : ""}`,
+        });
+        break;
+      }
+      case "subagent.completed": {
+        streaming = null;
+        const ms = Number(d.durationMs ?? 0);
+        out.push({
+          key: `sc${i}`,
+          cls: "tool",
+          text: `✓ @${String(d.agentName ?? "agent")}${ms ? ` · ${(ms / 1000).toFixed(1)}s` : ""}`,
+        });
         break;
       }
       case "session.error":

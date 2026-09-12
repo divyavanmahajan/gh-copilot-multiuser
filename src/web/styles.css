@@ -54,6 +54,35 @@ button:disabled { opacity: .5; cursor: default; }
 .md th { background: var(--panel); }
 .entry.tool { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); }
 .entry.meta { font-size: 12px; color: var(--muted); font-style: italic; }
+/* The / and @ picker, floating above the composer. */
+footer { position: relative; }
+.picker {
+  position: absolute; bottom: calc(100% + 6px); left: 16px; right: 16px; max-height: 260px; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  z-index: 10;
+}
+.picker-item {
+  display: flex; gap: 10px; align-items: baseline; width: 100%; text-align: left;
+  background: none; border: 0; border-radius: 0; padding: 7px 10px; color: var(--text); font: inherit; cursor: pointer;
+}
+.picker-item.on, .picker-item:hover { background: var(--border); }
+.picker-name { font-family: ui-monospace, monospace; white-space: nowrap; }
+.picker-desc { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-note { margin-left: auto; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.picker-empty { padding: 8px 10px; color: var(--muted); font-size: 12px; }
+
+/* The /skills and /agents answer. */
+.catalog .who { display: flex; align-items: center; gap: 8px; }
+.catalog .who button { margin-left: auto; padding: 2px 8px; font-size: 12px; }
+.catalog-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.catalog-list li { padding: 6px 0; border-top: 1px solid var(--border); }
+.catalog-list li:first-child { border-top: 0; }
+.catalog-list code { font-family: ui-monospace, monospace; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+.catalog-list .picker-note { margin-left: 8px; }
+.catalog-list .picker-desc { white-space: normal; margin-top: 3px; }
+.catalog-more { margin-top: 8px; }
+.catalog-more summary { color: var(--muted); font-size: 12px; cursor: pointer; }
+
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin-bottom: 8px; }
 .card.permission { border-color: var(--accent); }
 .card .actions { display: flex; gap: 6px; margin-top: 8px; }
