@@ -13,14 +13,18 @@ publish from your laptop; you push a tag.
 
 ## One-time setup
 
-1. **npm account and Trusted Publishing.** Sign in at npmjs.com, then *Access
-   Tokens* -> *Granular Access Tokens* -> *Create new token* -> **Granular access
-   token** (not Automation). Limit to Publishing. Add a Trusted Publisher for this
-   GitHub repository:
-   - Under the token settings, add *Trusted Publishers* -> *GitHub Actions* ->
-     select your GitHub org/user and repository.
-2. **Nothing for secrets.** No `NPM_TOKEN` needed. The workflow uses GitHub OIDC
-   (OpenID Connect) for authentication, which is more secure.
+1. **npm account and Trusted Publishing.** Sign in at npmjs.com, open the
+   package page for `@dvm/copilot-room` (the package must already exist — publish
+   the first version by hand, see *Publishing by hand* below), then *Settings* ->
+   *Trusted Publisher* -> *GitHub Actions* and fill in:
+   - **Organization or user:** `divyavanmahajan`
+   - **Repository:** `gh-copilot-multiuser`
+   - **Workflow filename:** `release.yml` (the filename only, not a path)
+   - **Environment:** leave blank; the workflow uses no GitHub environment.
+2. **Nothing for secrets.** No `NPM_TOKEN` needed. The workflow authenticates
+   via GitHub OIDC (OpenID Connect), which is more secure — the trust is the
+   config above, and each run mints a short-lived one-time credential. If an old
+   `NPM_TOKEN` secret exists, delete it.
 3. **Nothing for GHCR.** The Docker job authenticates with the workflow's own
    `GITHUB_TOKEN` via the `packages: write` permission already declared in the
    workflow.
@@ -63,8 +67,9 @@ docker pull ghcr.io/divyavanmahajan/gh-copilot-multiuser:1.2.3
 ```
 
 The image is also tagged `1.2` and `latest`. On npm, check the *Provenance*
-badge on the package page: the workflow publishes with `--provenance`, which
-attests the package was built from this repository at that commit.
+badge on the package page: a trusted-publishing run attaches provenance
+automatically (no `--provenance` flag needed), attesting the package was built
+from this repository at that commit.
 
 ## What ends up in the package
 
@@ -191,6 +196,7 @@ rotate it - removing the version does not remove copies.
 | `ENEEDAUTH` in CI | Trusted Publisher not configured in npm account |
 | `E403` on publish | name taken by someone else, or Trusted Publisher not set up for this repo |
 | `OIDC token is not valid` | GitHub OIDC not configured; check npm Trusted Publishers settings |
+| `Trusted publishing... requires npm >= 11.5.1` (or provenance/OIDC silently ignored) | the runner used Node 22's bundled npm 10.x; the `npm install -g npm@latest` step is missing or failed |
 | `tag v1.2.3 != package.json 1.2.4` | tag made by hand; delete it and use `npm version` |
 | Provenance step fails | the repo must be public, and `package.json` needs a `repository` field |
 | Workflow never ran | the tag was not pushed - `git push origin v1.2.3` |

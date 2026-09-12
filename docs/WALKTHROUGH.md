@@ -341,9 +341,9 @@ npm version minor          # bumps package.json and creates the git tag
 git push --follow-tags
 ```
 
-The Release workflow publishes `@dvm/copilot-room` to npm (needs the `NPM_TOKEN`
-repository secret) and pushes the Docker image to GitHub Container
-Registry. Users then get the new version with `npx @dvm/copilot-room@latest` or
+The Release workflow publishes `@dvm/copilot-room` to npm (via npm trusted
+publishing over GitHub OIDC — no secret) and pushes the Docker image to GitHub
+Container Registry. Users then get the new version with `npx @dvm/copilot-room@latest` or
 `docker pull ghcr.io/divyavanmahajan/gh-copilot-multiuser:latest`.
 
 ## Troubleshooting
