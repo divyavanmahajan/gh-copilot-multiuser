@@ -1,6 +1,6 @@
 {
   "name": "@dvm/copilot-room",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A shared room where a small team drives one GitHub Copilot agent session from their browsers.",
   "license": "MIT",
   "type": "module",
