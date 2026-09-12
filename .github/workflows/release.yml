@@ -1,45 +1,63 @@
 # Publishes on a version tag (v1.2.3):
-#   1. the npm package `copilot-room` (so `npx copilot-room` works), and
+#   1. the npm package `@dvm/gh-copilot-multiuser` (so `npx @dvm/gh-copilot-multiuser`
+#      works), and
 #   2. a Docker image on GitHub Container Registry for server mode.
 #
-# Setup once: add an npm automation token as the NPM_TOKEN repository secret.
-# GHCR needs no secret; it uses the workflow's GITHUB_TOKEN.
+# Neither job uses a long-lived secret. npm authenticates with this workflow's
+# OIDC token ("trusted publishing"), configured once on npmjs.com against this
+# repository and this file's name; GHCR uses the workflow's GITHUB_TOKEN.
+# docs/PUBLISHING.md has the setup and the traps.
 name: Release
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  packages: write
-  id-token: write
+permissions: {}
 
 jobs:
   npm:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # mints the OIDC token npm exchanges for a publish token
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # setup-node v7 or newer: earlier versions write a placeholder
+      # `_authToken=${NODE_AUTH_TOKEN}` into .npmrc whenever registry-url is
+      # set, and npm then reads that empty line as "already authenticated" and
+      # never attempts the OIDC exchange, failing with ENEEDAUTH.
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24 # ships npm >= 11.5.1, the first npm that can do this
           registry-url: https://registry.npmjs.org
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - name: Check npm is new enough to publish with OIDC
+        run: |
+          have="$(npm --version)"
+          printf '%s\n' 11.5.1 "$have" | sort -VC ||
+            { echo "npm $have is older than 11.5.1; trusted publishing needs 11.5.1+"; exit 1; }
       - name: Check tag matches package.json version
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           tag="${GITHUB_REF_NAME#v}"
           pkg="$(node -p "require('./package.json').version")"
           [ "$tag" = "$pkg" ] || { echo "tag v$tag != package.json $pkg"; exit 1; }
-      - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # No NODE_AUTH_TOKEN: an auth token in the environment takes precedence
+      # over OIDC. Provenance is attached automatically when publishing this
+      # way, so --provenance is not passed. --access public repeats what
+      # package.json's publishConfig already says, because a scoped package
+      # published without it is private.
+      - run: npm publish --access public
 
   docker:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3

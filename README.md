@@ -10,7 +10,7 @@ keeps one continuous context. Built on the
 
 ```sh
 cd your-repo
-npx copilot-room --host 0.0.0.0 --org your-org --hosts you
+npx @dvm/gh-copilot-multiuser --host 0.0.0.0 --org your-org --hosts you
 ```
 
 Colleagues open the URL, sign in with GitHub, and start typing.

@@ -1,5 +1,5 @@
 {
-  "name": "copilot-room",
+  "name": "@dvm/gh-copilot-multiuser",
   "version": "0.0.1",
   "description": "A shared room where a small team drives one GitHub Copilot agent session from their browsers.",
   "license": "MIT",
@@ -19,6 +19,9 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "npm run build:server && npm run build:web",
     "build:server": "tsup",
