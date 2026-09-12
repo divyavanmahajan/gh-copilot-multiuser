@@ -67,6 +67,8 @@ function RoomView() {
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [catalog, setCatalog] = useState<Catalog>({ skills: [], agents: [] });
+  const approvalsRef = useRef<HTMLDivElement>(null);
+  const seenApprovals = useRef(0);
   const [listing, setListing] = useState<"skills" | "agents" | null>(null);
   const [highlight, setHighlight] = useState(0);
   const typingTimer = useRef<number | null>(null);
@@ -139,6 +141,24 @@ function RoomView() {
       socket.close();
     };
   }, [socket]);
+
+  // An approval card is not a transcript entry, so the transcript's own
+  // auto-scroll does not reach it: without this a card can appear below the
+  // fold and expire unanswered while everyone waits.
+  useEffect(() => {
+    const arrived = approvals.length > seenApprovals.current;
+    seenApprovals.current = approvals.length;
+    if (!arrived || !approvalsRef.current) return;
+    const mine = me && approvals.some((a) => a.deciderIds.includes(me.id));
+    const main = approvalsRef.current.closest("main");
+    // Yanking someone out of the history they are reading is rude, so only do
+    // it when the answer is theirs to give. Otherwise follow only if they were
+    // already at the bottom. The header badge covers the rest.
+    const atBottom = main ? main.scrollHeight - main.scrollTop - main.clientHeight < 120 : true;
+    if (mine || atBottom) {
+      approvalsRef.current.scrollIntoView({ block: "end", behavior: "smooth" });
+    }
+  }, [approvals, me]);
 
   const submit = () => {
     const text = draft.trim();
@@ -216,6 +236,15 @@ function RoomView() {
         </span>
         <span className="status">session {room.sessionId.slice(0, 8)}</span>
         {error && <span className="status" style={{ color: "var(--danger)" }}>{error}</span>}
+        {approvals.length > 0 && (
+          <button
+            className="approval-jump"
+            onClick={() => approvalsRef.current?.scrollIntoView({ block: "end", behavior: "smooth" })}
+          >
+            {approvals.length === 1 ? "1 approval waiting" : `${approvals.length} approvals waiting`}
+            {me && approvals.some((a) => a.deciderIds.includes(me.id)) ? " · your call" : ""}
+          </button>
+        )}
         <span style={{ flex: 1 }} />
         {can(me.role, "abort") && status === "running" && (
           <button className="danger" onClick={() => socket.send({ type: "turn.abort" })}>Abort turn</button>
@@ -237,15 +266,17 @@ function RoomView() {
         ))}
         {listing && <CatalogList kind={listing} catalog={catalog} onClose={() => setListing(null)} />}
         <Transcript entries={transcript} />
-        {approvals.map((a) => (
-          <ApprovalCard
-            key={a.requestId}
-            pending={a}
-            me={me}
-            participants={participants}
-            onDecide={(decision) => socket.send({ type: "permission.respond", requestId: a.requestId, decision })}
-          />
-        ))}
+        <div ref={approvalsRef}>
+          {approvals.map((a) => (
+            <ApprovalCard
+              key={a.requestId}
+              pending={a}
+              me={me}
+              participants={participants}
+              onDecide={(decision) => socket.send({ type: "permission.respond", requestId: a.requestId, decision })}
+            />
+          ))}
+        </div>
       </main>
 
       <aside>

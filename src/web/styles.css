@@ -54,6 +54,16 @@ button:disabled { opacity: .5; cursor: default; }
 .md th { background: var(--panel); }
 .entry.tool { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); }
 .entry.meta { font-size: 12px; color: var(--muted); font-style: italic; }
+/* Stays visible in the header wherever the reader has scrolled to, because an
+   approval nobody notices is an approval that expires. */
+.approval-jump {
+  background: var(--danger); color: #fff; border: 0; border-radius: 6px;
+  padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer;
+  animation: approval-pulse 1.6s ease-in-out infinite;
+}
+@keyframes approval-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .approval-jump { animation: none; } }
+
 /* The / and @ picker, floating above the composer. */
 footer { position: relative; }
 .picker {
