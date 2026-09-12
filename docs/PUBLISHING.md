@@ -68,8 +68,10 @@ attests the package was built from this repository at that commit.
 ## What ends up in the package
 
 `package.json` sets `"files": ["dist"]`, so the tarball is `dist/` plus
-`package.json`, `README.md`, and `LICENSE` - about 145 kB packed. Source,
-tests, and docs are not shipped. Confirm before a release with:
+`package.json`, `README.md`, and `LICENSE` - eight files, around 200 kB
+packed and 700 kB unpacked at the time of writing. Source, tests, and docs
+are not shipped. Treat those numbers as a sanity check rather than a
+constant, and confirm before a release with:
 
 ```sh
 npm publish --dry-run
